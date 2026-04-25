@@ -1,0 +1,27 @@
+# Teacher training configuration (Phase 2)
+# Inherits defaults from default.yaml; only overrides are listed here.
+
+image_size: 768
+total_epochs: 100
+batch_size_teacher: 4
+lr_peaks:
+  - 0.0001
+  - 0.0001
+  - 0.00007
+ema_decay: 0.999
+
+# Loss weights
+damage_loss_weight: 0.70
+change_loss_weight: 0.20
+disaster_loss_weight: 0.10
+focal_gamma: 2.0
+lovasz_weight: 0.35
+dice_weight: 0.35
+focal_weight: 0.30
+
+# Architecture
+backbone: nvidia/segformer-b3-finetuned-ade-512-512
+use_deep_supervision: true
+gradient_checkpointing: false
+
+checkpoints_dir: checkpoints/teacher

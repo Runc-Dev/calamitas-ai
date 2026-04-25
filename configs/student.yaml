@@ -1,0 +1,20 @@
+# Student distillation configuration (Phase 3)
+
+image_size: 768
+total_epochs: 100
+batch_size_student: 8
+ema_decay: 0.999
+kd_temperature: 4.0
+
+# 5-component KD loss weights
+kd_alpha: 0.30     # soft-label KL divergence
+kd_beta: 0.25      # CE hard labels
+kd_gamma: 0.20     # feature matching
+kd_delta: 0.10     # attention transfer
+kd_epsilon: 0.15   # combo damage loss
+
+# Architecture
+backbone_student: nvidia/mit-b0
+backbone_teacher: nvidia/segformer-b3-finetuned-ade-512-512
+
+checkpoints_dir: checkpoints/student

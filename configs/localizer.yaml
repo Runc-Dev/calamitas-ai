@@ -1,0 +1,13 @@
+# Localizer training configuration (Phase 1)
+
+image_size: 512
+total_epochs: 50
+batch_size_teacher: 8
+lr_peaks:
+  - 0.0001
+  - 0.00005
+
+# Architecture
+backbone: nvidia/segformer-b3-finetuned-ade-512-512
+
+checkpoints_dir: checkpoints/teacher

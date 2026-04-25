@@ -1,0 +1,64 @@
+# ── Data (too large for git) ──────────────────────────────────
+data/
+*.zip
+*.tar.gz
+
+# ── Model checkpoints ────────────────────────────────────────
+checkpoints/
+*.pth
+*.pt
+*.onnx
+*.engine
+*.trt
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# ── Jupyter ──────────────────────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ── Experiment tracking ──────────────────────────────────────
+wandb/
+mlruns/
+runs/
+*.log
+*.tfevents.*
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDEs ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Environment ──────────────────────────────────────────────
+.env
+.venv/
+venv/
+env/
+
+# ── Large outputs (keep structure, not contents) ─────────────
+results/*.png
+results/*.jpg
+results/*.html
+outputs/
+
+# Commit these results files
+!results/ablation_table.csv
+!results/sota_comparison.csv

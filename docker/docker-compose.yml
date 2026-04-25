@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  afetsonar-inference:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: afetsonar:latest
+    volumes:
+      - ../data:/app/data:ro
+      - ../checkpoints:/app/checkpoints:ro
+      - ../results:/app/results
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --post  /app/data/samples/post.png
+      --pre   /app/data/samples/pre.png
+      --model /app/checkpoints/student/student_v1_best_ema.pth
+      --output /app/results/prediction.png
+
+  afetsonar-pipeline:
+    image: afetsonar:latest
+    volumes:
+      - ../data:/app/data:ro
+      - ../checkpoints:/app/checkpoints:ro
+      - ../results:/app/results
+    entrypoint: ["python", "scripts/run_pipeline.py"]
+    command: >
+      --post   /app/data/samples/post.png
+      --pre    /app/data/samples/pre.png
+      --model  /app/checkpoints/student/student_v1_best_ema.pth
+      --bbox   41.003,28.975,41.008,28.981
+      --output /app/results/afetsonar_map.html
