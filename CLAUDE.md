@@ -87,9 +87,9 @@ Tests that require torch are auto-skipped when torch is absent.
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1 — Repo structure | ✅ Done | Package + all modules |
-| 2 — Auto pre-fetch | 🔲 Next | AutoPreFetcher (Google Maps/Mapbox API) |
-| 3 — Incremental training | 🔲 | AfetsonarTrainer (resume, add_data, ablation) |
-| 4 — Gradio web app | 🔲 | HuggingFace Spaces deploy |
+| 2 — Auto pre-fetch | ✅ Done | AutoPreFetcher (Google Maps/Mapbox API) |
+| 3 — Incremental training | ✅ Done | AfetsonarTrainer (resume, add_data, ablation) |
+| 4 — Gradio web app | 🔲 Next | HuggingFace Spaces deploy |
 | 5 — SoTA improvement | 🔲 | TTA, SWA, backbone upgrade, pseudo-labeling |
 
 ## Current performance plateau
