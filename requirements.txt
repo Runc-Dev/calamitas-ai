@@ -1,5 +1,9 @@
 # AFETSONAR dependencies
 # Install with: pip install -r requirements.txt
+#
+# HuggingFace Spaces: SDK gradio, GPU T4, Python 3.10+
+# ── Web UI ──────────────────────────────────────────────────────
+gradio>=4.19.0
 
 # ── Core ML ───────────────────────────────────────────────────
 torch>=2.0.0
@@ -37,7 +41,7 @@ pyyaml>=6.0
 tqdm>=4.65.0
 
 # ── Optional: EXIF / drone GPS ────────────────────────────────
-# exifread>=3.0.0
+exifread>=3.0.0
 
 # ── Dev / testing ─────────────────────────────────────────────
 # pytest>=7.0.0
