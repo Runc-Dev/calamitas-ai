@@ -6,6 +6,7 @@ Public API::
     from afetsonar.geo import wgs84_to_utm, compute_gsd
     from afetsonar.geo import read_geotiff_metadata, read_geotiff_array
     from afetsonar.geo import FoliumMapBuilder
+    from afetsonar.geo import AutoPreFetcher
 """
 
 from afetsonar.geo.utils import (
@@ -34,6 +35,8 @@ try:
 except ImportError:
     pass  # folium not installed — FoliumMapBuilder unavailable
 
+from afetsonar.geo.auto_fetch import AutoPreFetcher
+
 __all__ = [
     "haversine_distance",
     "pixel_to_geo",
@@ -49,4 +52,5 @@ __all__ = [
     "read_geotiff_array",
     "write_prediction_geotiff",
     "FoliumMapBuilder",
+    "AutoPreFetcher",
 ]

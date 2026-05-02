@@ -235,7 +235,7 @@ def read_exif_gps(image_path: str) -> Optional[Dict[str, float]]:
     try:
         import exifread
     except ImportError:
-        raise ImportError("exifread is required: pip install exifread")
+        return None  # exifread optional — return None instead of hard error
 
     if not os.path.exists(image_path):
         return None
