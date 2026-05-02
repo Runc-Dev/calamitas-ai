@@ -11,7 +11,7 @@ import tempfile
 
 import numpy as np
 import pytest
-import torch
+torch = pytest.importorskip("torch", reason="torch not installed — skipping pipeline tests")
 
 
 @pytest.fixture

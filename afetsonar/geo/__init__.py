@@ -20,12 +20,19 @@ from afetsonar.geo.utils import (
     utm_to_wgs84,
     wgs84_to_utm,
 )
-from afetsonar.geo.geotiff import (
-    read_geotiff_array,
-    read_geotiff_metadata,
-    write_prediction_geotiff,
-)
-from afetsonar.geo.map_builder import FoliumMapBuilder
+try:
+    from afetsonar.geo.geotiff import (
+        read_geotiff_array,
+        read_geotiff_metadata,
+        write_prediction_geotiff,
+    )
+except ImportError:
+    pass  # rasterio not installed — geotiff functions unavailable
+
+try:
+    from afetsonar.geo.map_builder import FoliumMapBuilder
+except ImportError:
+    pass  # folium not installed — FoliumMapBuilder unavailable
 
 __all__ = [
     "haversine_distance",

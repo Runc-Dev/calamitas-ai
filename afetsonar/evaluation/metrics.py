@@ -10,7 +10,20 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 import numpy as np
-import torch
+
+try:
+    import torch
+    _TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    _TORCH_AVAILABLE = False
+
+
+def _maybe_no_grad(fn):
+    """Decorator: apply torch.no_grad() only when torch is available."""
+    if _TORCH_AVAILABLE:
+        return torch.no_grad()(fn)
+    return fn
 
 
 class SegmentationMetrics:
@@ -40,18 +53,18 @@ class SegmentationMetrics:
         """Clear accumulated confusion matrix."""
         self.confusion = np.zeros((self.num_classes, self.num_classes), dtype=np.int64)
 
-    @torch.no_grad()
-    def update(self, preds: "np.ndarray | torch.Tensor", targets: "np.ndarray | torch.Tensor") -> None:
+    @_maybe_no_grad
+    def update(self, preds, targets) -> None:
         """Accumulate predictions into the confusion matrix.
 
         Args:
             preds: Predicted class indices ``(B, H, W)`` — argmax should
-                already be applied.
+                already be applied.  Accepts numpy arrays or torch tensors.
             targets: Ground-truth class indices ``(B, H, W)``.
         """
-        if isinstance(preds, torch.Tensor):
+        if _TORCH_AVAILABLE and isinstance(preds, torch.Tensor):
             preds = preds.detach().cpu().numpy()
-        if isinstance(targets, torch.Tensor):
+        if _TORCH_AVAILABLE and isinstance(targets, torch.Tensor):
             targets = targets.detach().cpu().numpy()
 
         preds = preds.flatten()
@@ -131,21 +144,18 @@ class ClassificationMetrics:
         self.per_class_correct = np.zeros(self.num_classes, dtype=np.int64)
         self.per_class_total = np.zeros(self.num_classes, dtype=np.int64)
 
-    @torch.no_grad()
-    def update(
-        self,
-        preds: "np.ndarray | torch.Tensor",
-        targets: "np.ndarray | torch.Tensor",
-    ) -> None:
+    @_maybe_no_grad
+    def update(self, preds, targets) -> None:
         """Accumulate batch predictions.
 
         Args:
             preds: Predicted class indices ``(B,)`` (argmax already applied).
+                Accepts numpy arrays or torch tensors.
             targets: Ground-truth class indices ``(B,)``.
         """
-        if isinstance(preds, torch.Tensor):
+        if _TORCH_AVAILABLE and isinstance(preds, torch.Tensor):
             preds = preds.detach().cpu().numpy()
-        if isinstance(targets, torch.Tensor):
+        if _TORCH_AVAILABLE and isinstance(targets, torch.Tensor):
             targets = targets.detach().cpu().numpy()
 
         self.correct += int((preds == targets).sum())

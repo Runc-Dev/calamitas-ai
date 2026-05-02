@@ -23,8 +23,15 @@ Key metrics (xBD test set, 1375 images):
 __version__ = "1.0.0"
 __author__ = "AFETSONAR Team"
 
-from afetsonar.pipeline import AfetsonarPipeline
+# config is lightweight — always safe to import
 from afetsonar.config import DefaultConfig, NUM_CLASSES, CLASS_NAMES
+
+# pipeline requires cv2 + torch — import lazily so sub-modules work standalone
+def __getattr__(name: str):
+    if name == "AfetsonarPipeline":
+        from afetsonar.pipeline import AfetsonarPipeline
+        return AfetsonarPipeline
+    raise AttributeError(f"module 'afetsonar' has no attribute {name!r}")
 
 __all__ = [
     "AfetsonarPipeline",

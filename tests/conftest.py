@@ -4,38 +4,51 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import torch
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    TORCH_AVAILABLE = False
+
+requires_torch = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="torch not installed — skipping GPU/model tests",
+)
 
 
 @pytest.fixture
-def device() -> torch.device:
-    """Return CPU device for deterministic unit tests."""
+def device():
+    """Return CPU torch.device (skipped if torch absent)."""
+    if not TORCH_AVAILABLE:
+        pytest.skip("torch not installed")
     return torch.device("cpu")
 
 
 @pytest.fixture
-def dummy_siamese_batch(device: torch.device):
+def dummy_siamese_batch(device):
     """Return a small 6-channel pre+post batch on CPU."""
     torch.manual_seed(42)
     return torch.randn(2, 6, 64, 64, device=device)
 
 
 @pytest.fixture
-def dummy_rgb_batch(device: torch.device):
+def dummy_rgb_batch(device):
     """Return a small 3-channel RGB batch on CPU."""
     torch.manual_seed(42)
     return torch.randn(2, 3, 64, 64, device=device)
 
 
 @pytest.fixture
-def dummy_mask(device: torch.device):
+def dummy_mask(device):
     """Return a small (2, 64, 64) label mask with values 0–5."""
     torch.manual_seed(42)
     return torch.randint(0, 6, (2, 64, 64), device=device)
 
 
 @pytest.fixture
-def dummy_binary_mask(device: torch.device):
+def dummy_binary_mask(device):
     """Return a small (2, 64, 64) binary label mask with values 0–1."""
     torch.manual_seed(42)
     return torch.randint(0, 2, (2, 64, 64), device=device)
