@@ -1,7 +1,7 @@
 # AFETSONAR 🛰️
 
 **Drone-based Disaster Damage Assessment & Routing**  
-Teknofest 2025 · Built in 11 days from scratch
+
 
 ---
 
