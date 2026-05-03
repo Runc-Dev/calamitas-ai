@@ -1,5 +1,6 @@
 # ── Data (too large for git) ──────────────────────────────────
 data/
+!afetsonar/data/
 *.zip
 *.tar.gz
 

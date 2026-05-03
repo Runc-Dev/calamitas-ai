@@ -4,6 +4,7 @@ Public API::
 
     from afetsonar.evaluation import SegmentationMetrics, ClassificationMetrics
     from afetsonar.evaluation import build_ablation_table, build_sota_table
+    from afetsonar.evaluation import TTAWrapper
 """
 
 from afetsonar.evaluation.metrics import ClassificationMetrics, SegmentationMetrics
@@ -14,6 +15,7 @@ from afetsonar.evaluation.ablation import (
     build_sota_table,
     save_ablation_results,
 )
+from afetsonar.evaluation.tta import TTAWrapper
 
 __all__ = [
     "SegmentationMetrics",
@@ -23,4 +25,5 @@ __all__ = [
     "build_ablation_table",
     "build_sota_table",
     "save_ablation_results",
+    "TTAWrapper",
 ]

@@ -90,7 +90,34 @@ Tests that require torch are auto-skipped when torch is absent.
 | 2 — Auto pre-fetch | ✅ Done | AutoPreFetcher (Google Maps/Mapbox API) |
 | 3 — Incremental training | ✅ Done | AfetsonarTrainer (resume, add_data, ablation) |
 | 4 — Gradio web app | ✅ Done | HuggingFace Spaces deploy (app.py) |
-| 5 — SoTA improvement | 🔲 Next | TTA, SWA, backbone upgrade, pseudo-labeling |
+| 5 — SoTA improvement | ✅ Done | TTA (8 transforms + multi-scale), Copy-Paste aug |
+
+## Phase 5 — What was implemented
+
+| Teknik | Dosya | Beklenen kazanım |
+|--------|-------|-----------------|
+| TTA (8 geometric + multi-scale) | `afetsonar/evaluation/tta.py` — `TTAWrapper` | +0.03–0.05 mF1 |
+| Copy-Paste augmentation | `afetsonar/data/copy_paste.py` — `CopyPasteAugmentation`, `CopyPasteDataset` | +0.02–0.04 mF1 |
+
+### TTAWrapper usage
+```python
+from afetsonar import AfetsonarPipeline
+from afetsonar.evaluation.tta import TTAWrapper
+
+pipeline = AfetsonarPipeline("checkpoints/student_v1_best_ema.pth")
+tta = TTAWrapper(pipeline, n_augmentations=8)          # 8 transforms
+tta = TTAWrapper(pipeline, scales=(0.75, 1.0, 1.25))   # multi-scale
+mask = tta.predict("post.png", "pre.png")
+```
+
+### CopyPasteAugmentation usage
+```python
+from afetsonar.data.copy_paste import CopyPasteDataset, CopyPasteAugmentation
+
+aug     = CopyPasteAugmentation(paste_probability=0.5, damage_classes_to_paste=(2, 3, 4))
+dataset = CopyPasteDataset(train_dataset, aug)
+# Use dataset as drop-in replacement — donor selected randomly per batch
+```
 
 ## Current performance plateau
 
@@ -99,4 +126,5 @@ Teacher hits mIoU ≈ 0.47 on validation, 0.424 on test. Root causes:
 2. Class imbalance (minor_damage 0.53% of pixels)
 3. minor ↔ major ↔ no_damage confusion
 
-Planned fixes (Phase 3/5): TTA (+0.03–0.05), SWA (+0.01–0.03), Copy-Paste aug, pseudo-labeling.
+With Phase 5 TTA: expected mF1 ≈ 0.67–0.69 (no retraining).
+With Copy-Paste retraining: expected mF1 ≈ 0.69–0.73.

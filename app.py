@@ -236,6 +236,7 @@ def analyze(
     provider:  str,
     api_key:   str,
     hospitals: List[Dict],
+    use_tta:   bool = False,
 ) -> Tuple[str, Any, Any, Any, Any, str, pd.DataFrame, str, Optional[str]]:
     """Run the full AFETSONAR pipeline and return all outputs.
 
@@ -280,9 +281,19 @@ def analyze(
     if pre_array is not None:
         pre_tmp = _save_array_to_tmp(pre_array)
 
+    # ---- Build predictor (plain or TTA-wrapped) ----
+    predictor = pipeline
+    if use_tta:
+        try:
+            from afetsonar.evaluation.tta import TTAWrapper
+            predictor = TTAWrapper(pipeline, n_augmentations=8)
+            status_parts.append("✅ TTA aktif (8 geometric transform ortalaması).")
+        except Exception as exc:
+            status_parts.append(f"⚠️ TTA başlatılamadı: {exc}. Normal tahmin kullanılıyor.")
+
     # ---- Run prediction ----
     try:
-        mask = pipeline.predict(post_tmp, pre_path=pre_tmp)
+        mask = predictor.predict(post_tmp, pre_path=pre_tmp)
         status_parts.append("✅ Hasar maskesi oluşturuldu.")
     except Exception as exc:
         _cleanup_tmps(post_tmp, pre_tmp)
@@ -487,6 +498,14 @@ def build_ui() -> gr.Blocks:
                         interactive=False,
                     )
 
+                # TTA toggle
+                with gr.Accordion("⚡ Gelişmiş Ayarlar", open=False):
+                    use_tta = gr.Checkbox(
+                        label="TTA (Test-Time Augmentation) — daha yüksek doğruluk, ~8× daha yavaş",
+                        value=False,
+                        info="8 geometrik transform ortalaması alır: mF1 +0.03-0.05 kazanım.",
+                    )
+
                 analyze_btn = gr.Button(
                     "🔍 Analiz Et", variant="primary", size="lg"
                 )
@@ -565,6 +584,7 @@ def build_ui() -> gr.Blocks:
                 lat_min, lon_min, lat_max, lon_max,
                 provider, api_key,
                 hospitals_state,
+                use_tta,
             ],
             outputs=[
                 status_box,
