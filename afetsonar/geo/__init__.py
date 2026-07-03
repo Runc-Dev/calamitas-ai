@@ -11,6 +11,7 @@ Public API::
 
 from afetsonar.geo.utils import (
     build_image_index,
+    buildings_to_geojson,
     compute_gsd,
     geo_to_pixel,
     get_utm_zone,
@@ -47,6 +48,7 @@ __all__ = [
     "get_utm_zone",
     "compute_gsd",
     "read_exif_gps",
+    "buildings_to_geojson",
     "build_image_index",
     "read_geotiff_metadata",
     "read_geotiff_array",

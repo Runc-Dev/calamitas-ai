@@ -223,7 +223,15 @@ def compute_gsd(
 
 
 def read_exif_gps(image_path: str) -> Optional[Dict[str, float]]:
-    """Read GPS coordinates from a drone JPEG's EXIF metadata.
+    """Read GPS coordinates from a drone image's EXIF metadata.
+
+    Primary path uses Pillow (a hard dependency, so GPS extraction always
+    works); ``exifread`` is used as a fallback for exotic maker-note
+    formats Pillow cannot parse.
+
+    Note: EXIF survives only in the *original* file (JPEG/TIFF).  Images
+    that were re-encoded (e.g. loaded into a numpy array and re-saved,
+    or converted to PNG) lose their metadata — pass the original upload.
 
     Args:
         image_path: Path to the JPEG/TIFF image.
@@ -232,12 +240,66 @@ def read_exif_gps(image_path: str) -> Optional[Dict[str, float]]:
         Dict with keys ``latitude``, ``longitude``, ``altitude`` (metres),
         or ``None`` if no GPS data is found.
     """
+    if not os.path.exists(image_path):
+        return None
+
+    result = _read_gps_pillow(image_path)
+    if result is None:
+        result = _read_gps_exifread(image_path)
+    return result
+
+
+def _read_gps_pillow(image_path: str) -> Optional[Dict[str, float]]:
+    """GPS extraction via Pillow's EXIF reader."""
+    try:
+        from PIL import Image
+
+        with Image.open(image_path) as img:
+            exif = img.getexif()
+            gps = exif.get_ifd(0x8825)  # GPS IFD
+    except Exception:
+        return None
+
+    if not gps:
+        return None
+
+    def _deg(values) -> Optional[float]:
+        try:
+            d, m, s = (float(v) for v in values)
+            return d + m / 60.0 + s / 3600.0
+        except Exception:
+            return None
+
+    # GPS IFD tag ids: 1=LatRef 2=Lat 3=LonRef 4=Lon 5=AltRef 6=Alt
+    lat = _deg(gps.get(2)) if gps.get(2) is not None else None
+    lon = _deg(gps.get(4)) if gps.get(4) is not None else None
+    if lat is None or lon is None:
+        return None
+    if str(gps.get(1, "N")).upper().startswith("S"):
+        lat = -lat
+    if str(gps.get(3, "E")).upper().startswith("W"):
+        lon = -lon
+
+    alt: Optional[float] = None
+    if gps.get(6) is not None:
+        try:
+            alt = float(gps[6])
+            alt_ref = gps.get(5, 0)
+            if isinstance(alt_ref, bytes):
+                alt_ref = alt_ref[0] if alt_ref else 0
+            if int(alt_ref) == 1:  # below sea level
+                alt = -alt
+        except Exception:
+            pass
+
+    return {"latitude": lat, "longitude": lon, "altitude": alt}
+
+
+def _read_gps_exifread(image_path: str) -> Optional[Dict[str, float]]:
+    """GPS extraction via the optional ``exifread`` package."""
     try:
         import exifread
     except ImportError:
-        return None  # exifread optional — return None instead of hard error
-
-    if not os.path.exists(image_path):
         return None
 
     try:
@@ -280,6 +342,68 @@ def read_exif_gps(image_path: str) -> Optional[Dict[str, float]]:
             pass
 
     return {"latitude": lat, "longitude": lon, "altitude": alt}
+
+
+# ============================================================
+# GeoJSON export
+# ============================================================
+
+def buildings_to_geojson(
+    buildings: List[Dict],
+    bbox_latlon: Optional[Tuple[float, float, float, float]] = None,
+) -> Dict:
+    """Convert pipeline buildings to a GeoJSON FeatureCollection.
+
+    Buildings with a ``polygon_latlon`` footprint become ``Polygon``
+    features (what web maps draw as the building outline); buildings
+    with only a centroid become ``Point`` features.
+
+    Note:
+        GeoJSON coordinate order is ``[longitude, latitude]`` (RFC 7946)
+        — the opposite of the ``[lat, lon]`` pairs used elsewhere in
+        this package.  Leaflet's ``L.geoJSON`` handles this correctly
+        out of the box.
+
+    Args:
+        buildings: Building dicts from
+            :meth:`~afetsonar.pipeline.AfetsonarPipeline.mask_to_buildings`
+            (after optional priority scoring / team assignment).
+        bbox_latlon: Optional ``(lat_min, lon_min, lat_max, lon_max)``,
+            stored as the FeatureCollection ``bbox`` in GeoJSON order
+            ``[west, south, east, north]``.
+
+    Returns:
+        GeoJSON ``FeatureCollection`` dict.
+    """
+    features = []
+    property_keys = (
+        "building_id", "damage_class", "damage_class_name",
+        "area_m2", "priority_score", "team_id",
+    )
+    for b in buildings:
+        polygon = b.get("polygon_latlon")
+        if polygon and len(polygon) >= 3:
+            ring = [[float(lon), float(lat)] for lat, lon in polygon]
+            if ring[0] != ring[-1]:
+                ring.append(list(ring[0]))  # GeoJSON rings must be closed
+            geometry: Dict = {"type": "Polygon", "coordinates": [ring]}
+        elif "lat" in b and "lon" in b:
+            geometry = {"type": "Point",
+                        "coordinates": [float(b["lon"]), float(b["lat"])]}
+        else:
+            continue  # not geo-referenced
+
+        features.append({
+            "type": "Feature",
+            "geometry": geometry,
+            "properties": {k: b[k] for k in property_keys if k in b},
+        })
+
+    collection: Dict = {"type": "FeatureCollection", "features": features}
+    if bbox_latlon is not None:
+        lat_min, lon_min, lat_max, lon_max = bbox_latlon
+        collection["bbox"] = [lon_min, lat_min, lon_max, lat_max]
+    return collection
 
 
 # ============================================================
