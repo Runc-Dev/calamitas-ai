@@ -23,13 +23,28 @@ configs/            ← YAML hyperparameters (default.yaml, teacher.yaml, studen
 
 ## Models
 
-| Model | Backbone | Params | Latency | mIoU (test) | mF1 (test) |
-|-------|----------|--------|---------|-------------|------------|
-| Teacher (`SiameseTeacherSegformerV3`) | SegFormer-B3 | 50.3M | ~1140ms | 0.424 | 0.640 |
-| Student (`StudentSiameseSegformer`) | SegFormer-B0 | 4.3M | 36ms | 0.395 | 0.617 |
-| Localizer (`LocalizerSegformer`) | SegFormer-B3 | ~45M | — | Building IoU 0.756 | — |
+| Model | Backbone | Params | Latency | mIoU (test) | mF1 (test) | mIoU (val) | mF1 (val) |
+|-------|----------|--------|---------|-------------|------------|------------|-----------|
+| Teacher (`SiameseTeacherSegformerV3`) | SegFormer-B3 | 50.3M | ~1140ms | 0.424 | 0.640 | 0.5586 | 0.6866 |
+| Student (`StudentSiameseSegformer`) | SegFormer-B0 | 4.3M | 36ms | 0.395 | 0.617 | 0.439* | — |
+| Localizer (`LocalizerSegformer`) | SegFormer-B3 | ~45M | — | Building IoU 0.756 | — | — | — |
+
+*Student val_miou_no_bg (no background class).
 
 KD efficiency: 93.2% (student retains 93% of teacher knowledge).
+
+### Teacher v4 — per-class validation metrics (best epoch 70 / 80)
+
+| Class | IoU | F1 |
+|-------|-----|----|
+| background | 0.990 | 0.995 |
+| no_damage | 0.699 | 0.823 |
+| minor_damage | 0.289 | 0.448 |
+| major_damage | 0.438 | 0.609 |
+| destroyed | 0.623 | 0.767 |
+| unclassified | 0.314 | 0.478 |
+
+Checkpoint: `teacher_v4_best_ema.pth` (Drive ID: `1866pHX-_PDErPnYERQw65cpXEKLELyoI`, 192 MB)
 
 ## Dataset
 
@@ -82,7 +97,7 @@ pytest tests/ -v
 
 Tests that require torch are auto-skipped when torch is absent.
 
-## 5-phase roadmap
+## Roadmap
 
 | Phase | Status | Description |
 |-------|--------|-------------|
@@ -91,6 +106,54 @@ Tests that require torch are auto-skipped when torch is absent.
 | 3 — Incremental training | ✅ Done | AfetsonarTrainer (resume, add_data, ablation) |
 | 4 — Gradio web app | ✅ Done | HuggingFace Spaces deploy (app.py) |
 | 5 — SoTA improvement | ✅ Done | TTA (8 transforms + multi-scale), Copy-Paste aug |
+| 6 — Global support + Mobile | ✅ Done | FastAPI backend (`api/`), React Native app (`mobile/`) |
+
+## Drive alignment fixes (applied 2026-05-03)
+
+| File | Before | After | Reason |
+|------|--------|-------|--------|
+| `config.py` IMAGE_SIZE | 768 | **512** | Drive training used 512 |
+| `augmentations.py` default | 768 | **512** | Match Drive `augmentations_v2.py` |
+| `astar.py` LON_M | Istanbul 41°N hardcode | **dynamic (mean lat of buildings)** | Global routing support |
+| `config.py` POPULATION_DENSITY comment | "Fatih/Sultanahmet" | generic | Global support |
+
+## Global Architecture (Phase 6)
+
+```
+api/
+  main.py          ← FastAPI REST backend (POST /analyze, GET /health)
+  requirements.txt
+
+mobile/
+  App.js           ← React Native (Expo) root
+  app.json         ← Expo config (iOS + Android)
+  src/
+    screens/
+      HomeScreen.js    ← Image picker + GPS + Analyze button
+      ResultScreen.js  ← Mask image + stats + buildings + satellite map
+    api/
+      client.js        ← axios calls to FastAPI backend
+    utils/
+      colors.js        ← damage class colors (global, no city hardcoding)
+```
+
+### Running the API
+
+```bash
+pip install -r api/requirements.txt
+AFETSONAR_CHECKPOINT=checkpoints/student/student_v1_best_ema.pth \
+    uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+### Running the mobile app
+
+```bash
+cd mobile
+npm install
+# Edit src/api/client.js — set BASE_URL to your server IP
+npx expo start
+# Scan QR code with Expo Go (iOS/Android)
+```
 
 ## Phase 5 — What was implemented
 
