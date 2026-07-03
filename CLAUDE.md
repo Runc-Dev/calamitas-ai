@@ -69,7 +69,7 @@ Train/Val/Test = 6418/1375/1375.
 
 - **Training**: Google Colab Pro+ H100 GPU
 - **Inference**: edge device (Jetson Nano / Xavier) or CPU
-- **Local machine**: code editing only, torch NOT installed locally
+- **Local machine**: torch 2.11 (CPU) installed — full pytest suite (174 tests), demo, Gradio/FastAPI smoke tests and ONNX export all run locally
 - Python 3.10+, transformers (HuggingFace), albumentations 1.x or 2.x
 
 ## Running training (Colab)
@@ -107,6 +107,15 @@ Tests that require torch are auto-skipped when torch is absent.
 | 4 — Gradio web app | ✅ Done | HuggingFace Spaces deploy (app.py) |
 | 5 — SoTA improvement | ✅ Done | TTA (8 transforms + multi-scale), Copy-Paste aug |
 | 6 — Global support + Mobile | ✅ Done | FastAPI backend (`api/`), React Native app (`mobile/`) |
+| 7 — Tier-1 eval + ONNX | ✅ Code ready | `tta_forward` (batched TTA), `evaluate.py --tta`, notebook 09 (Colab), `deployment.py` (ONNX export, parity-checked). **Tier-1 runs pending on Colab H100** |
+
+## Next actions (2026-07-03)
+
+1. Run `notebooks/09_tier1_tta_swa_eval.ipynb` on Colab H100 → baseline vs
+   TTA vs TTA+multi-scale vs SWA comparison; commit `results/tier1_*.json`.
+2. If TTA gains confirmed (+0.03–0.05 mF1 expected): enable TTA by default
+   in `app.py` and deploy to HuggingFace Spaces.
+3. Tier 2: Copy-Paste retraining (`CopyPasteDataset` ready), pseudo-labeling.
 
 ## Drive alignment fixes (applied 2026-05-03)
 

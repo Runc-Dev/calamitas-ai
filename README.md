@@ -170,6 +170,25 @@ python scripts/train_student.py \
 python scripts/evaluate.py \
   --model checkpoints/student/student_v1_best_ema.pth \
   --test-csv data/xbd/splits/test.csv
+
+# Evaluation with Tier-1 TTA (8 transforms, optional multi-scale)
+python scripts/evaluate.py \
+  --model checkpoints/teacher/teacher_v4_best_ema.pth \
+  --test-csv data/xbd/splits/test.csv \
+  --tta --tta-scales 0.75 1.0 1.25
+```
+
+See `notebooks/09_tier1_tta_swa_eval.ipynb` for the ready-to-run Colab
+workflow (baseline vs TTA vs TTA+multi-scale vs SWA).
+
+### ONNX export (edge deployment)
+
+```bash
+pip install onnx onnxruntime   # or: pip install -e ".[onnx]"
+
+python scripts/export_onnx.py \
+  --checkpoint checkpoints/student/student_v1_best_ema.pth
+# → student_v1_best_ema.onnx (16.5 MB), onnxruntime parity-checked
 ```
 
 ### Docker
@@ -188,16 +207,21 @@ AFETSONAR/
 ├── afetsonar/               # Installable Python package
 │   ├── models/              # Localizer, Teacher, Student, EMA
 │   ├── losses/              # Lovász, Combo, KD, Localization
-│   ├── data/                # XBDDatasetV2, augmentations
+│   ├── data/                # XBDDatasetV2, augmentations, Copy-Paste
 │   ├── routing/             # Priority, K-means, A*, TSP, LZ
-│   ├── geo/                 # Geo utils, GeoTIFF, FoliumMapBuilder
-│   ├── evaluation/          # Metrics, ablation tables
+│   ├── geo/                 # Geo utils, GeoTIFF, FoliumMapBuilder, AutoPreFetcher
+│   ├── evaluation/          # Metrics, ablation tables, TTA
+│   ├── training/            # AfetsonarTrainer (incremental fine-tuning)
 │   ├── config.py            # All hyper-parameters
+│   ├── deployment.py        # ONNX export / parity verification
 │   └── pipeline.py          # AfetsonarPipeline (end-to-end)
-├── scripts/                 # CLI training / inference scripts
-├── notebooks/               # Original 8-notebook training journey
+├── scripts/                 # CLI training / inference / export scripts
+├── api/                     # FastAPI REST backend (POST /analyze)
+├── mobile/                  # React Native (Expo) client
+├── app.py                   # Gradio web UI (HuggingFace Spaces)
+├── notebooks/               # Training journey + 09 Tier-1 Colab notebook
 ├── configs/                 # YAML hyper-parameter files
-├── tests/                   # pytest suite (models, losses, routing)
+├── tests/                   # pytest suite (174 tests, torch-optional)
 ├── docs/                    # Architecture, references, guides
 ├── demo/                    # Self-contained demo
 ├── docker/                  # Dockerfile + compose

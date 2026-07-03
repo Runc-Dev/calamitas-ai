@@ -161,6 +161,25 @@ python scripts/train_student.py \
 python scripts/evaluate.py \
   --model checkpoints/student/student_v1_best_ema.pth \
   --test-csv data/xbd/splits/test.csv
+
+# Tier-1 TTA ile değerlendirme (8 transform, opsiyonel çoklu ölçek)
+python scripts/evaluate.py \
+  --model checkpoints/teacher/teacher_v4_best_ema.pth \
+  --test-csv data/xbd/splits/test.csv \
+  --tta --tta-scales 0.75 1.0 1.25
+```
+
+Hazır Colab akışı için: `notebooks/09_tier1_tta_swa_eval.ipynb`
+(baseline / TTA / TTA+çoklu ölçek / SWA karşılaştırması).
+
+### ONNX dışa aktarma (saha cihazları için)
+
+```bash
+pip install onnx onnxruntime   # veya: pip install -e ".[onnx]"
+
+python scripts/export_onnx.py \
+  --checkpoint checkpoints/student/student_v1_best_ema.pth
+# → student_v1_best_ema.onnx (16.5 MB), onnxruntime parite kontrolü dahil
 ```
 
 ---
@@ -172,19 +191,25 @@ AFETSONAR/
 ├── afetsonar/               # Kurulabilir Python paketi
 │   ├── models/              # Localizer, Teacher, Student, EMA
 │   ├── losses/              # Lovász, Combo, KD, Lokalizasyon
-│   ├── data/                # XBDDatasetV2, augmentasyonlar
+│   ├── data/                # XBDDatasetV2, augmentasyonlar, Copy-Paste
 │   ├── routing/             # Öncelik, K-means, A*, TSP, LZ
-│   ├── geo/                 # Coğrafi araçlar, GeoTIFF, FoliumMapBuilder
-│   ├── evaluation/          # Metrikler, ablasyon tabloları
+│   ├── geo/                 # Coğrafi araçlar, GeoTIFF, FoliumMapBuilder, AutoPreFetcher
+│   ├── evaluation/          # Metrikler, ablasyon tabloları, TTA
+│   ├── training/            # AfetsonarTrainer (artımlı fine-tune)
 │   ├── config.py            # Tüm hiperparametreler
+│   ├── deployment.py        # ONNX dışa aktarma / parite doğrulama
 │   └── pipeline.py          # AfetsonarPipeline (uçtan uca)
-├── scripts/                 # CLI eğitim / çıkarım betikleri
-├── notebooks/               # Orijinal 8 eğitim not defteri
+├── scripts/                 # CLI eğitim / çıkarım / export betikleri
+├── api/                     # FastAPI REST arka ucu (POST /analyze)
+├── mobile/                  # React Native (Expo) istemcisi
+├── app.py                   # Gradio web arayüzü (HuggingFace Spaces)
+├── notebooks/               # Eğitim defterleri + 09 Tier-1 Colab defteri
 ├── configs/                 # YAML hiperparametre dosyaları
-├── tests/                   # pytest test paketi
+├── tests/                   # pytest test paketi (174 test, torch opsiyonel)
 ├── docs/                    # Mimari, referanslar, rehberler
 ├── demo/                    # Bağımsız demo
-└── docker/                  # Dockerfile + compose
+├── docker/                  # Dockerfile + compose
+└── results/                 # Değerlendirme çıktıları (CSV/JSON)
 ```
 
 ---
