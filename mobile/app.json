@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "AFETSONAR",
+    "slug": "afetsonar",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "afetsonar",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#c62828"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow AFETSONAR to access your photos for damage assessment.",
+          "cameraPermission": "Allow AFETSONAR to use your camera to capture disaster images."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow AFETSONAR to use your location to geo-reference damage assessments."
+        }
+      ]
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#c62828"
+      },
+      "package": "com.afetsonar.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.afetsonar.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "AFETSONAR uses your location to geo-reference damage maps.",
+        "NSCameraUsageDescription": "AFETSONAR uses the camera to capture disaster imagery.",
+        "NSPhotoLibraryUsageDescription": "AFETSONAR accesses photos for damage assessment."
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    }
+  }
+}
