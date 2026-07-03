@@ -235,3 +235,66 @@ class TestTTAWrapperInference:
         assert "mask" in result
         assert "buildings" in result
         assert result["mask"].shape == (32, 32)
+
+
+# -----------------------------------------------------------------------
+# tta_forward: batched tensor-level TTA
+# -----------------------------------------------------------------------
+
+@_requires_torch
+class TestTTAForward:
+    """Tensor-level TTA used by scripts/evaluate.py --tta."""
+
+    def _make_model(self):
+        class _DummyModel(_torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                _torch.manual_seed(0)
+                self.conv = _torch.nn.Conv2d(6, 6, 3, padding=1)
+
+            def forward(self, x):
+                return {"damage_logits": self.conv(x)}
+
+        return _DummyModel().eval()
+
+    @pytest.mark.parametrize("t", _TTA_TRANSFORMS)
+    def test_tensor_round_trip_is_identity(self, t):
+        x = _torch.randn(2, 6, 32, 32)
+        recovered = t.invert_tensor(t.apply_tensor(x))
+        assert _torch.equal(x, recovered), f"Round-trip failed for {t}"
+
+    def test_output_shape_and_probabilities(self):
+        from afetsonar.evaluation.tta import tta_forward
+
+        model = self._make_model()
+        x = _torch.randn(2, 6, 32, 32)
+        probs = tta_forward(model, x, n_augmentations=8)
+        assert probs.shape == (2, 6, 32, 32)
+        sums = probs.sum(dim=1)
+        assert _torch.allclose(sums, _torch.ones_like(sums), atol=1e-5)
+
+    def test_single_augmentation_equals_plain_softmax(self):
+        from afetsonar.evaluation.tta import tta_forward
+
+        model = self._make_model()
+        x = _torch.randn(1, 6, 32, 32)
+        probs = tta_forward(model, x, n_augmentations=1)
+        with _torch.no_grad():
+            expected = _torch.softmax(model(x)["damage_logits"], dim=1)
+        assert _torch.allclose(probs, expected, atol=1e-6)
+
+    def test_multi_scale_preserves_shape(self):
+        from afetsonar.evaluation.tta import tta_forward
+
+        model = self._make_model()
+        x = _torch.randn(1, 6, 64, 64)
+        probs = tta_forward(model, x, n_augmentations=4, scales=(0.5, 1.0, 1.5))
+        assert probs.shape == (1, 6, 64, 64)
+
+    def test_invalid_n_augmentations_raises(self):
+        from afetsonar.evaluation.tta import tta_forward
+
+        model = self._make_model()
+        x = _torch.randn(1, 6, 32, 32)
+        with pytest.raises(ValueError):
+            tta_forward(model, x, n_augmentations=9)

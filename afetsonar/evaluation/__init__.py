@@ -15,7 +15,7 @@ from afetsonar.evaluation.ablation import (
     build_sota_table,
     save_ablation_results,
 )
-from afetsonar.evaluation.tta import TTAWrapper
+from afetsonar.evaluation.tta import TTAWrapper, tta_forward
 
 __all__ = [
     "SegmentationMetrics",
@@ -26,4 +26,5 @@ __all__ = [
     "build_sota_table",
     "save_ablation_results",
     "TTAWrapper",
+    "tta_forward",
 ]

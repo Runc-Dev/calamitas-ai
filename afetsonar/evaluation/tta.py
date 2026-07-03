@@ -61,6 +61,30 @@ class _TTATransform:
             out = out[:, :, ::-1]
         return np.ascontiguousarray(out)
 
+    def apply_tensor(self, x: "torch.Tensor") -> "torch.Tensor":
+        """Forward transform on a batched ``(N, C, H, W)`` tensor."""
+        import torch
+
+        if self.flip_h:
+            x = torch.flip(x, dims=[-1])
+        if self.flip_v:
+            x = torch.flip(x, dims=[-2])
+        if self.rot90:
+            x = torch.rot90(x, self.rot90, dims=(-2, -1))
+        return x
+
+    def invert_tensor(self, x: "torch.Tensor") -> "torch.Tensor":
+        """Inverse transform on a batched ``(N, C, H, W)`` tensor."""
+        import torch
+
+        if self.rot90:
+            x = torch.rot90(x, -self.rot90, dims=(-2, -1))
+        if self.flip_v:
+            x = torch.flip(x, dims=[-2])
+        if self.flip_h:
+            x = torch.flip(x, dims=[-1])
+        return x
+
 
 # Canonical 8-transform set: identity + 3 rotations × 2 flip variants
 _TTA_TRANSFORMS: List[_TTATransform] = [
@@ -73,6 +97,71 @@ _TTA_TRANSFORMS: List[_TTATransform] = [
     _TTATransform(flip_h=True, rot90=1),      # 6 — 90° + h-flip
     _TTATransform(flip_v=True, rot90=1),      # 7 — 90° + v-flip
 ]
+
+
+def tta_forward(
+    model: "torch.nn.Module",
+    batch: "torch.Tensor",
+    n_augmentations: int = 8,
+    scales: Tuple[float, ...] = (1.0,),
+) -> "torch.Tensor":
+    """Batched, tensor-level TTA forward pass.
+
+    Unlike :class:`TTAWrapper` (which operates on image files/arrays via
+    a pipeline), this works directly on preprocessed input batches, so
+    it can be dropped into an evaluation loop over a ``DataLoader``.
+    Geometric transforms commute with per-channel normalisation, so
+    augmenting the normalised tensor is equivalent to augmenting the
+    source image.
+
+    Args:
+        model: Siamese model returning ``{"damage_logits": ...}``.
+        batch: ``(N, 6, H, W)`` preprocessed pre+post tensor.
+        n_augmentations: Number of geometric TTA variants (1–8).
+        scales: Relative scale factors for multi-scale TTA.  Each entry
+            resizes the input to a multiple of 32 near ``scale × H``
+            and upsamples the logits back before averaging.
+
+    Returns:
+        ``(N, num_classes, H, W)`` averaged softmax probabilities.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    if not (1 <= n_augmentations <= len(_TTA_TRANSFORMS)):
+        raise ValueError(
+            f"n_augmentations must be 1–{len(_TTA_TRANSFORMS)}, got {n_augmentations}"
+        )
+
+    h, w = batch.shape[-2:]
+    accumulated: Optional[torch.Tensor] = None
+    count = 0
+
+    with torch.no_grad():
+        for scale in scales:
+            # SegFormer downsamples ×32 — keep spatial size a multiple of 32.
+            target = max(32, int(round(h * scale / 32)) * 32)
+            scaled = (
+                batch if target == h
+                else F.interpolate(batch, size=(target, target),
+                                   mode="bilinear", align_corners=False)
+            )
+            for transform in _TTA_TRANSFORMS[:n_augmentations]:
+                out = model(transform.apply_tensor(scaled))
+                logits = out["damage_logits"]
+                if isinstance(logits, (list, tuple)):
+                    logits = logits[0]
+                # Invert the geometry first (while the tensor still has the
+                # transformed orientation), then resize back to (h, w).
+                probs = transform.invert_tensor(torch.softmax(logits, dim=1))
+                if probs.shape[-2:] != (h, w):
+                    probs = F.interpolate(probs, size=(h, w),
+                                          mode="bilinear", align_corners=False)
+                accumulated = probs if accumulated is None else accumulated + probs
+                count += 1
+
+    assert accumulated is not None
+    return accumulated / count
 
 
 class TTAWrapper:
