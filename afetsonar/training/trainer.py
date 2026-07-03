@@ -208,8 +208,8 @@ class AfetsonarTrainer:
             f"({len(new_train)} train / {len(new_val)} val) "
             f"merged with {len(existing_df)} existing rows."
         )
-        print(f"  train CSV → {output_csv}")
-        print(f"  val CSV   → {val_csv}")
+        print(f"  train CSV -> {output_csv}")
+        print(f"  val CSV   -> {val_csv}")
         return {"train_csv": output_csv, "val_csv": val_csv}
 
     def resume_training(
@@ -383,7 +383,7 @@ class AfetsonarTrainer:
                 {"model_state_dict": swa_model.module.state_dict()},
                 swa_path,
             )
-            print(f"SWA model saved → {swa_path}")
+            print(f"SWA model saved -> {swa_path}")
 
         result: Dict[str, Any] = {
             "experiment_name": experiment_name,

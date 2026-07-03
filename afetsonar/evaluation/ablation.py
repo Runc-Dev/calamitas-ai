@@ -155,5 +155,5 @@ def save_ablation_results(
     sota_path = Path(output_dir) / "sota_comparison.csv"
     ablation_df.to_csv(ablation_path, index=False)
     sota_df.to_csv(sota_path, index=False)
-    print(f"Saved → {ablation_path}")
-    print(f"Saved → {sota_path}")
+    print(f"Saved -> {ablation_path}")
+    print(f"Saved -> {sota_path}")

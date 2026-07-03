@@ -35,7 +35,32 @@ DAMAGE_COLORS: Dict[str, str] = {
     "background":   "#9e9e9e",  # grey
 }
 
+# Index-aligned with config.CLASS_NAMES (0=background … 5=unclassified)
+_CLASS_INDEX_TO_NAME = [
+    "background", "no_damage", "minor_damage",
+    "major_damage", "destroyed", "unclassified",
+]
+
 TEAM_COLORS = ["#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#f4a261", "#6a4c93"]
+
+
+def _damage_name(building: Dict[str, Any]) -> str:
+    """Resolve a building's damage class name.
+
+    Pipeline buildings carry ``damage_class`` as an *int* (0–5) plus a
+    ``damage_class_name`` string; older callers passed the name directly
+    in ``damage_class``.  Accept all three forms.
+    """
+    name = building.get("damage_class_name")
+    if isinstance(name, str) and name:
+        return name
+    cls = building.get("damage_class", "background")
+    if isinstance(cls, (int, float)):
+        idx = int(cls)
+        if 0 <= idx < len(_CLASS_INDEX_TO_NAME):
+            return _CLASS_INDEX_TO_NAME[idx]
+        return "background"
+    return str(cls)
 
 
 class FoliumMapBuilder:
@@ -109,9 +134,13 @@ class FoliumMapBuilder:
         """
         layer = self._get_layer(layer_name)
         for b in buildings:
-            cls = b.get("damage_class", "background")
-            color = DAMAGE_COLORS.get(cls, "#9e9e9e")
-            radius = max(4, min(14, b.get("priority_score", 1) ** 0.5 * 2))
+            if "lat" not in b or "lon" not in b:
+                continue  # not geo-referenced (no bbox was provided)
+            name = _damage_name(b)
+            color = DAMAGE_COLORS.get(name, "#9e9e9e")
+            radius = max(4, min(14, max(b.get("priority_score", 1), 0) ** 0.5 * 2))
+            team = b.get("team_id")
+            team_txt = f" | Team {team}" if team is not None else ""
             folium.CircleMarker(
                 location=[b["lat"], b["lon"]],
                 radius=radius,
@@ -120,10 +149,89 @@ class FoliumMapBuilder:
                 fill_color=color,
                 fill_opacity=0.85,
                 tooltip=(
-                    f"Building #{b.get('building_id', '?')} | {cls} | "
+                    f"Building #{b.get('building_id', '?')} | {name} | "
                     f"Priority: {b.get('priority_score', 0):.1f} | "
+                    f"Area: {b.get('area_m2', 0):.0f} m²{team_txt}"
+                ),
+            ).add_to(layer)
+        return self
+
+    def add_building_footprints(
+        self,
+        buildings: List[Dict[str, Any]],
+        layer_name: str = "🏠 Building Footprints",
+    ) -> "FoliumMapBuilder":
+        """Draw building boundary polygons colour-coded by damage class.
+
+        Args:
+            buildings: Building dicts carrying ``polygon_latlon``
+                (``[lat, lon]`` vertex list from ``mask_to_buildings``).
+                Buildings without a polygon are skipped — use
+                :meth:`add_damage_markers` for centroid fallback.
+            layer_name: Folium layer name.
+
+        Returns:
+            ``self`` for chaining.
+        """
+        layer = self._get_layer(layer_name)
+        for b in buildings:
+            polygon = b.get("polygon_latlon")
+            if not polygon or len(polygon) < 3:
+                continue
+            name = _damage_name(b)
+            color = DAMAGE_COLORS.get(name, "#9e9e9e")
+            folium.Polygon(
+                locations=polygon,
+                color=color,
+                weight=2,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.35,
+                tooltip=(
+                    f"Building #{b.get('building_id', '?')} | {name} | "
                     f"Area: {b.get('area_m2', 0):.0f} m²"
                 ),
+            ).add_to(layer)
+        return self
+
+    def add_team_zones(
+        self,
+        teams: List[Dict[str, Any]],
+        layer_name: str = "👥 Team Zones",
+    ) -> "FoliumMapBuilder":
+        """Add rescue-team centre markers with assignment summaries.
+
+        Args:
+            teams: Team dicts from ``assign_teams`` / ``assign_hospitals``
+                with keys ``team_id``, ``lat``, ``lon``, ``n_buildings``,
+                ``total_priority`` and optionally ``assigned_hospital``.
+            layer_name: Folium layer name.
+
+        Returns:
+            ``self`` for chaining.
+        """
+        layer = self._get_layer(layer_name)
+        for t in teams:
+            if "lat" not in t or "lon" not in t:
+                continue
+            tid = t.get("team_id", 0)
+            color = t.get("color", TEAM_COLORS[tid % len(TEAM_COLORS)])
+            hospital = t.get("assigned_hospital", "?")
+            folium.Marker(
+                location=[t["lat"], t["lon"]],
+                icon=folium.Icon(color="blue", icon="user", prefix="fa"),
+                tooltip=(
+                    f"Team {tid} | {t.get('n_buildings', 0)} buildings | "
+                    f"priority {t.get('total_priority', 0):.0f} | base: {hospital}"
+                ),
+            ).add_to(layer)
+            folium.Circle(
+                location=[t["lat"], t["lon"]],
+                radius=60,
+                color=color,
+                fill=True,
+                fill_opacity=0.10,
+                weight=2,
             ).add_to(layer)
         return self
 
@@ -269,5 +377,5 @@ class FoliumMapBuilder:
         self.add_layer_control()
         self.map.save(output_path)
         size_kb = os.path.getsize(output_path) / 1024
-        print(f"Map saved → {output_path}  ({size_kb:.1f} KB)")
+        print(f"Map saved -> {output_path}  ({size_kb:.1f} KB)")
         return os.path.abspath(output_path)

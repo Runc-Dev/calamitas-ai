@@ -112,7 +112,7 @@ class AfetsonarPipeline:
 
         if is_teacher:
             from afetsonar.models.teacher import SiameseTeacherSegformerV3
-            print("[AfetsonarPipeline] Detected teacher checkpoint — loading SiameseTeacherSegformerV3")
+            print("[AfetsonarPipeline] Detected teacher checkpoint -- loading SiameseTeacherSegformerV3")
             model = SiameseTeacherSegformerV3(
                 num_damage_classes=self.config.num_classes,
                 num_disaster_classes=self.config.num_disaster_classes,
@@ -120,7 +120,7 @@ class AfetsonarPipeline:
             )
         else:
             from afetsonar.models.student import StudentSiameseSegformer
-            print("[AfetsonarPipeline] Detected student checkpoint — loading StudentSiameseSegformer")
+            print("[AfetsonarPipeline] Detected student checkpoint -- loading StudentSiameseSegformer")
             model = StudentSiameseSegformer(
                 num_damage_classes=self.config.num_classes,
                 num_disaster_classes=self.config.num_disaster_classes,
@@ -288,11 +288,30 @@ class AfetsonarPipeline:
 
         Returns:
             List of building dicts: ``building_id``, ``damage_class``,
-            ``damage_class_name``, ``area_m2``, ``centroid_pixel``.
-            Geographic keys ``lat`` and ``lon`` are added when
+            ``damage_class_name``, ``area_m2``, ``centroid_pixel`` and
+            ``polygon_pixel`` (simplified footprint outline, ``(x, y)``
+            vertices).  Geographic keys ``lat``, ``lon`` and
+            ``polygon_latlon`` (``[lat, lon]`` vertices) are added when
             ``bbox_latlon`` is provided.
         """
-        px_m   = pixel_size_m or self.config.pixel_size_m
+        import math
+
+        h, w = mask.shape
+
+        # Pixel area: derive real ground resolution from the bbox when
+        # available — a fixed 0.5 m/px (xBD native) is wrong for arbitrary
+        # drone footage and produces wildly incorrect building areas.
+        if bbox_latlon is not None and pixel_size_m is None:
+            lat_min, lon_min, lat_max, lon_max = bbox_latlon
+            mean_lat = (lat_min + lat_max) / 2.0
+            px_h_m = 111_320.0 * abs(lat_max - lat_min) / h
+            px_w_m = (111_320.0 * math.cos(math.radians(mean_lat))
+                      * abs(lon_max - lon_min) / w)
+            px_area_m2 = px_h_m * px_w_m
+        else:
+            px_m = pixel_size_m or self.config.pixel_size_m
+            px_area_m2 = px_m ** 2
+
         names  = self.config.class_names
         buildings: List[Dict] = []
         bid = 0
@@ -312,19 +331,38 @@ class AfetsonarPipeline:
                 cx_px = M["m10"] / M["m00"]
                 cy_px = M["m01"] / M["m00"]
 
+                # Simplified footprint outline (Douglas-Peucker, ~1 % of
+                # the perimeter) — this is what a web map draws as the
+                # building boundary.
+                epsilon = 0.01 * cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, max(epsilon, 1.0), True)
+                polygon_px = [
+                    (float(pt[0][0]), float(pt[0][1])) for pt in approx
+                ]
+
                 b: Dict[str, Any] = {
                     "building_id": bid,
                     "damage_class": cls,
                     "damage_class_name": names[cls] if cls < len(names) else f"class_{cls}",
-                    "area_m2": area_px * (px_m ** 2),
+                    "area_m2": area_px * px_area_m2,
                     "centroid_pixel": (cx_px, cy_px),
+                    "polygon_pixel": polygon_px,
                 }
 
                 if bbox_latlon is not None:
                     lat_min, lon_min, lat_max, lon_max = bbox_latlon
-                    h, w = mask.shape
-                    b["lat"] = float(lat_max - (cy_px / h) * (lat_max - lat_min))
-                    b["lon"] = float(lon_min + (cx_px / w) * (lon_max - lon_min))
+
+                    def _px_to_latlon(x_px: float, y_px: float) -> List[float]:
+                        # Image row 0 is the northern edge (lat_max).
+                        return [
+                            float(lat_max - (y_px / h) * (lat_max - lat_min)),
+                            float(lon_min + (x_px / w) * (lon_max - lon_min)),
+                        ]
+
+                    b["lat"], b["lon"] = _px_to_latlon(cx_px, cy_px)
+                    b["polygon_latlon"] = [
+                        _px_to_latlon(x, y) for x, y in polygon_px
+                    ]
 
                 buildings.append(b)
                 bid += 1
@@ -374,8 +412,16 @@ class AfetsonarPipeline:
         *,
         lat: Optional[float] = None,
         lon: Optional[float] = None,
+        include_routes: bool = True,
+        include_lz: bool = True,
     ) -> str:
         """Full pipeline: image → interactive HTML map.
+
+        Layers: damage markers, team zones, hospitals, and — when the OSM
+        road network for the bbox can be downloaded — damage-weighted A*
+        team routes and NATO STANAG 3204 helicopter landing zones.
+        Network-dependent layers degrade gracefully (skipped with a
+        warning) so the map always renders.
 
         Args:
             post_path: Post-disaster image path.
@@ -387,6 +433,10 @@ class AfetsonarPipeline:
             n_teams: Number of rescue teams.  Defaults to ``config.n_teams``.
             lat: Latitude for auto-fetch (keyword-only).
             lon: Longitude for auto-fetch (keyword-only).
+            include_routes: Compute A* team routes over the OSM road graph
+                (requires internet access for the OSM download).
+            include_lz: Search OSM for helicopter landing zone candidates
+                (requires internet access).
 
         Returns:
             Absolute path to the saved HTML file.
@@ -401,7 +451,7 @@ class AfetsonarPipeline:
         buildings = analysis["buildings"]
 
         if not buildings:
-            print("Warning: no buildings detected in mask — generating empty map.")
+            print("Warning: no buildings detected in mask -- generating empty map.")
 
         buildings, teams = assign_teams(buildings, n_teams=n)
         teams = assign_hospitals(teams, hospitals)
@@ -411,6 +461,162 @@ class AfetsonarPipeline:
         center_lon = (lon_min + lon_max) / 2
 
         builder = FoliumMapBuilder(center_lat, center_lon)
+        builder.add_building_footprints(buildings)
         builder.add_damage_markers(buildings)
-        builder.add_hospitals(hospitals)
+        if teams:
+            builder.add_team_zones(teams)
+        if hospitals:
+            builder.add_hospitals(hospitals)
+
+        if include_routes and teams:
+            try:
+                routes = self.compute_team_routes(buildings, teams, bbox_latlon)
+                if routes:
+                    builder.add_team_routes(routes)
+            except Exception as exc:
+                print(f"Warning: route layer skipped ({exc})")
+
+        if include_lz:
+            try:
+                lzs = self.find_landing_zones(bbox_latlon)
+                if lzs:
+                    builder.add_landing_zones(lzs)
+            except Exception as exc:
+                print(f"Warning: landing-zone layer skipped ({exc})")
+
         return builder.save(output_path)
+
+    # ------------------------------------------------------------------
+    # Routing layers (network-dependent)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _fetch_road_graph(bbox_latlon: Tuple[float, float, float, float]):
+        """Download the OSM driving network for a bbox via osmnx."""
+        import osmnx as ox
+
+        lat_min, lon_min, lat_max, lon_max = bbox_latlon
+        try:
+            # osmnx >= 2.0: bbox = (left, bottom, right, top)
+            return ox.graph_from_bbox(
+                bbox=(lon_min, lat_min, lon_max, lat_max), network_type="drive"
+            )
+        except TypeError:
+            # osmnx 1.x: positional (north, south, east, west)
+            return ox.graph_from_bbox(
+                lat_max, lat_min, lon_max, lon_min, network_type="drive"
+            )
+
+    def compute_team_routes(
+        self,
+        buildings: List[Dict[str, Any]],
+        teams: List[Dict[str, Any]],
+        bbox_latlon: Tuple[float, float, float, float],
+    ) -> List[Dict[str, Any]]:
+        """Compute damage-weighted A* routes for each rescue team.
+
+        Downloads the OSM road graph for the bbox, applies gradient edge
+        weights (destroyed buildings block roads), orders each team's
+        buildings with nearest-neighbour TSP and chains A* segments.
+        Falls back to a straight line for segments A* cannot connect.
+
+        Args:
+            buildings: Geo-referenced buildings with ``team_id`` assigned.
+            teams: Team dicts from ``assign_teams``.
+            bbox_latlon: ``(lat_min, lon_min, lat_max, lon_max)``.
+
+        Returns:
+            Route dicts with ``coords`` ([lat, lon] list), ``team_id``,
+            ``total_m`` and ``hospital`` — the format
+            :meth:`FoliumMapBuilder.add_team_routes` expects.
+        """
+        from afetsonar.routing.astar import apply_gradient_weights, astar_segment
+        from afetsonar.routing.tsp import nearest_neighbor_tsp
+
+        graph = self._fetch_road_graph(bbox_latlon)
+        graph, _ = apply_gradient_weights(graph, buildings)
+
+        routes: List[Dict[str, Any]] = []
+        for team in teams:
+            tid = team["team_id"]
+            team_buildings = [
+                b for b in buildings
+                if b.get("team_id") == tid and "lat" in b and "lon" in b
+            ]
+            if not team_buildings:
+                continue
+
+            order = nearest_neighbor_tsp(team["lat"], team["lon"], team_buildings)
+            by_id = {b["building_id"]: b for b in team_buildings}
+
+            cur_lat, cur_lon = team["lat"], team["lon"]
+            coords: List[Tuple[float, float]] = []
+            total_m = 0.0
+            for bid in order:
+                b = by_id[bid]
+                ok, segment, seg_m = astar_segment(
+                    graph, cur_lat, cur_lon, b["lat"], b["lon"]
+                )
+                if ok and len(segment) >= 2:
+                    coords.extend(segment)
+                    total_m += seg_m
+                else:
+                    coords.extend([(cur_lat, cur_lon), (b["lat"], b["lon"])])
+                    total_m += haversine_distance(cur_lat, cur_lon, b["lat"], b["lon"])
+                cur_lat, cur_lon = b["lat"], b["lon"]
+
+            if len(coords) >= 2:
+                routes.append({
+                    "coords": [[c[0], c[1]] for c in coords],
+                    "team_id": tid,
+                    "total_m": total_m,
+                    "hospital": team.get("assigned_hospital", "?"),
+                })
+        return routes
+
+    @staticmethod
+    def find_landing_zones(
+        bbox_latlon: Tuple[float, float, float, float],
+    ) -> List[Dict[str, Any]]:
+        """Find NATO STANAG 3204 compliant helicopter LZ candidates.
+
+        Queries OSM for open areas (parks, pitches, grass, parking) inside
+        the bbox and filters them by minimum landing dimensions.
+
+        Args:
+            bbox_latlon: ``(lat_min, lon_min, lat_max, lon_max)``.
+
+        Returns:
+            LZ candidate dicts (``lz_id``, ``name``, ``lat``, ``lon``,
+            ``area_m2``), possibly empty.
+        """
+        import osmnx as ox
+
+        from afetsonar.routing.helicopter import filter_lz_candidates
+
+        lat_min, lon_min, lat_max, lon_max = bbox_latlon
+        tags = {
+            "leisure": ["park", "pitch", "stadium", "playground"],
+            "landuse": ["grass", "recreation_ground", "meadow"],
+            "amenity": ["parking"],
+        }
+        try:
+            gdf = ox.features_from_bbox(
+                bbox=(lon_min, lat_min, lon_max, lat_max), tags=tags
+            )
+        except TypeError:
+            gdf = ox.features_from_bbox(
+                lat_max, lat_min, lon_max, lon_min, tags=tags
+            )
+
+        features = []
+        for _, row in gdf.iterrows():
+            geom = getattr(row, "geometry", None)
+            if geom is None or geom.is_empty:
+                continue
+            name = row.get("name")
+            features.append({
+                "geometry": geom,
+                "name": name if isinstance(name, str) else None,
+            })
+        return filter_lz_candidates(features)
