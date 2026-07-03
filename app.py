@@ -159,7 +159,10 @@ def _generate_map_html(
             bldgs_with_teams, teams = assign_teams(buildings, n_teams=min(5, len(buildings)))
             if hospitals:
                 teams = assign_hospitals(teams, hospitals)
+            builder.add_building_footprints(bldgs_with_teams)
             builder.add_damage_markers(bldgs_with_teams)
+            if teams:
+                builder.add_team_zones(teams)
         if hospitals:
             builder.add_hospitals(hospitals)
         builder.add_layer_control()
@@ -182,23 +185,30 @@ def _save_array_to_tmp(arr: np.ndarray, suffix: str = ".png") -> str:
 # Core event handlers
 # ============================================================
 
-def extract_exif_gps(post_img: Optional[np.ndarray]) -> Tuple[Any, Any, str]:
-    """Read GPS coordinates from the uploaded post-disaster image's EXIF."""
-    if post_img is None:
+def extract_exif_gps(post_path: Optional[str]) -> Tuple[Any, Any, str]:
+    """Read GPS coordinates from the uploaded post-disaster image's EXIF.
+
+    Works on the *original* uploaded file — EXIF metadata does not survive
+    numpy round-trips or PNG re-encoding, which is why the image input
+    must be ``type="filepath"``.
+    """
+    if not post_path:
         return gr.update(), gr.update(), "❌ Önce görüntü yükleyin."
 
     try:
-        from afetsonar.geo.auto_fetch import AutoPreFetcher
-        tmp = _save_array_to_tmp(post_img, suffix=".png")
-        coords = AutoPreFetcher().extract_gps(tmp)
-        os.unlink(tmp)
+        from afetsonar.geo.utils import read_exif_gps
+        coords = read_exif_gps(post_path)
     except Exception as exc:
         return gr.update(), gr.update(), f"⚠️ EXIF okunamadı: {exc}"
 
     if coords:
-        msg = f"✅ GPS bulundu: {coords['lat']:.5f}°, {coords['lon']:.5f}°"
-        return coords["lat"], coords["lon"], msg
-    return gr.update(), gr.update(), "ℹ️ Bu görüntüde GPS EXIF verisi yok."
+        msg = f"✅ GPS bulundu: {coords['latitude']:.5f}°, {coords['longitude']:.5f}°"
+        return coords["latitude"], coords["longitude"], msg
+    return gr.update(), gr.update(), (
+        "ℹ️ Bu görüntüde GPS EXIF verisi yok. "
+        "PNG'ler ve yeniden kaydedilmiş görüntüler EXIF içermez — "
+        "drone'un orijinal JPEG dosyasını yükleyin."
+    )
 
 
 def add_hospital(
@@ -225,8 +235,8 @@ def _hospitals_df(hospitals: List[Dict]) -> pd.DataFrame:
 
 
 def analyze(
-    post_img:  Optional[np.ndarray],
-    pre_img:   Optional[np.ndarray],
+    post_img:  Optional[str],
+    pre_img:   Optional[str],
     lat:       Optional[float],
     lon:       Optional[float],
     lat_min:   Optional[float],
@@ -240,6 +250,9 @@ def analyze(
 ) -> Tuple[str, Any, Any, Any, Any, str, pd.DataFrame, str, Optional[str]]:
     """Run the full AFETSONAR pipeline and return all outputs.
 
+    ``post_img`` / ``pre_img`` are file paths (``gr.Image(type="filepath")``)
+    so EXIF GPS metadata in the original upload is preserved.
+
     Returns
     -------
     status, pre_out, post_out, mask_out, overlay_out,
@@ -250,18 +263,36 @@ def analyze(
     if pipeline is None:
         return err, None, None, None, None, "", pd.DataFrame(), "", None
 
-    if post_img is None:
+    if not post_img:
         return "❌ Post-disaster görüntüsü gerekli.", None, None, None, None, "", pd.DataFrame(), "", None
 
-    # ---- Save post image to tmp for pipeline ----
-    post_tmp = _save_array_to_tmp(post_img)
+    from PIL import Image as PILImage
+    post_arr = np.array(PILImage.open(post_img).convert("RGB"))
+
+    status_parts: List[str] = []
+    created_tmps: List[str] = []
+    post_tmp = post_img  # original upload on disk — EXIF intact
+
+    # ---- Auto GPS: fall back to EXIF when lat/lon fields are empty ----
+    if lat is None or lon is None:
+        try:
+            from afetsonar.geo.utils import read_exif_gps
+            exif = read_exif_gps(post_img)
+        except Exception:
+            exif = None
+        if exif:
+            lat, lon = exif["latitude"], exif["longitude"]
+            status_parts.append(
+                f"✅ Konum EXIF'ten otomatik alındı: {lat:.5f}°, {lon:.5f}°"
+            )
 
     # ---- Resolve pre image ----
     pre_array: Optional[np.ndarray] = None
-    status_parts: List[str] = []
+    pre_tmp: Optional[str] = None
 
-    if pre_img is not None:
-        pre_array = pre_img
+    if pre_img:
+        pre_tmp = pre_img
+        pre_array = np.array(PILImage.open(pre_img).convert("RGB"))
         status_parts.append("✅ Pre görüntüsü: manuel yüklendi")
     elif api_key and lat is not None and lon is not None:
         try:
@@ -276,10 +307,10 @@ def analyze(
     else:
         status_parts.append("ℹ️ Pre görüntüsü yok — post görüntüsü yedek olarak kullanıldı.")
 
-    # ---- Save pre to tmp if array ----
-    pre_tmp: Optional[str] = None
-    if pre_array is not None:
+    # ---- Save auto-fetched pre to tmp ----
+    if pre_array is not None and pre_tmp is None:
         pre_tmp = _save_array_to_tmp(pre_array)
+        created_tmps.append(pre_tmp)
 
     # ---- Build predictor (plain or TTA-wrapped) ----
     predictor = pipeline
@@ -296,7 +327,7 @@ def analyze(
         mask = predictor.predict(post_tmp, pre_path=pre_tmp)
         status_parts.append("✅ Hasar maskesi oluşturuldu.")
     except Exception as exc:
-        _cleanup_tmps(post_tmp, pre_tmp)
+        _cleanup_tmps(*created_tmps)
         return f"❌ Tahmin hatası: {exc}", None, None, None, None, "", pd.DataFrame(), "", None
 
     # ---- Resolve bbox ----
@@ -327,15 +358,14 @@ def analyze(
 
     # ---- Visualize ----
     # Resize mask to match post image for display
-    h_orig, w_orig = post_img.shape[:2]
-    from PIL import Image as PILImage
+    h_orig, w_orig = post_arr.shape[:2]
     mask_resized = np.array(
         PILImage.fromarray(mask).resize((w_orig, h_orig), PILImage.NEAREST)
     )
 
     mask_color   = _colorize_mask(mask_resized)
-    overlay_img  = _overlay_mask(post_img, mask_resized, alpha=0.5)
-    pre_display  = pre_array if pre_array is not None else post_img
+    overlay_img  = _overlay_mask(post_arr, mask_resized, alpha=0.5)
+    pre_display  = pre_array if pre_array is not None else post_arr
 
     stats_md   = _mask_stats_markdown(mask_resized)
     bldgs_df   = _buildings_to_dataframe(buildings)
@@ -355,7 +385,7 @@ def analyze(
             mf.write(map_html_content.encode())
         status_parts.append("✅ İnteraktif harita oluşturuldu.")
 
-    _cleanup_tmps(post_tmp, pre_tmp)
+    _cleanup_tmps(*created_tmps)
 
     status = "\n".join(status_parts)
     wrapped_map = (
@@ -369,7 +399,7 @@ def analyze(
     return (
         status,
         pre_display,    # pre_out
-        post_img,       # post_out
+        post_arr,       # post_out
         mask_color,     # mask_out
         overlay_img,    # overlay_out
         stats_md,
@@ -430,14 +460,16 @@ def build_ui() -> gr.Blocks:
             with gr.Column(scale=1, min_width=340):
                 gr.Markdown("### 📥 Girdi")
 
+                # type="filepath" preserves the original upload on disk —
+                # numpy mode strips EXIF and breaks GPS extraction.
                 post_img = gr.Image(
-                    label="Post-disaster görüntü *",
-                    type="numpy",
+                    label="Post-disaster görüntü * (GPS için orijinal JPEG)",
+                    type="filepath",
                     sources=["upload", "clipboard"],
                 )
                 pre_img = gr.Image(
                     label="Pre-disaster görüntü (opsiyonel)",
-                    type="numpy",
+                    type="filepath",
                     sources=["upload", "clipboard"],
                 )
 
