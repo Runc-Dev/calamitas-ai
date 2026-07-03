@@ -90,8 +90,11 @@ def apply_gradient_weights(
     except ImportError:
         raise ImportError("shapely is required: pip install shapely")
 
-    # Approximate degrees → metres conversion (Sultanahmet ~41°N)
-    LON_M = 111_320.0 * math.cos(math.radians(41.005))
+    # Degrees → metres conversion: use mean latitude of buildings for accuracy.
+    # Fallback to equator (most conservative) if no buildings have coords.
+    lats = [b["lat"] for b in buildings if "lat" in b]
+    mean_lat = sum(lats) / len(lats) if lats else 0.0
+    LON_M = 111_320.0 * math.cos(math.radians(mean_lat))
     LAT_M = 111_320.0
 
     def _m_to_deg(m: float) -> float:

@@ -89,10 +89,13 @@ class AfetsonarPipeline:
     # ------------------------------------------------------------------
 
     def _load_model(self, model_path: str) -> torch.nn.Module:
-        """Load a student or teacher checkpoint and return the model in eval mode."""
-        from afetsonar.models import StudentSiameseSegformer
+        """Load a student or teacher checkpoint and return the model in eval mode.
 
-        checkpoint = torch.load(model_path, map_location=self.device)
+        Auto-detects model type from checkpoint tensor shapes:
+        - patch_embeddings.0 with 64 channels → Teacher (SegFormer-B3)
+        - patch_embeddings.0 with 32 channels → Student (SegFormer-B0)
+        """
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
 
         state_dict = checkpoint
         if isinstance(checkpoint, dict):
@@ -101,11 +104,29 @@ class AfetsonarPipeline:
                     state_dict = checkpoint[key]
                     break
 
-        model = StudentSiameseSegformer(
-            num_damage_classes=self.config.num_classes,
-            num_disaster_classes=self.config.num_disaster_classes,
-            pretrained=False,
+        # Auto-detect model type from first patch embedding channel count
+        probe_key = "encoder.patch_embeddings.0.proj.weight"
+        is_teacher = (
+            probe_key in state_dict and state_dict[probe_key].shape[0] == 64
         )
+
+        if is_teacher:
+            from afetsonar.models.teacher import SiameseTeacherSegformerV3
+            print("[AfetsonarPipeline] Detected teacher checkpoint — loading SiameseTeacherSegformerV3")
+            model = SiameseTeacherSegformerV3(
+                num_damage_classes=self.config.num_classes,
+                num_disaster_classes=self.config.num_disaster_classes,
+                pretrained=False,
+            )
+        else:
+            from afetsonar.models.student import StudentSiameseSegformer
+            print("[AfetsonarPipeline] Detected student checkpoint — loading StudentSiameseSegformer")
+            model = StudentSiameseSegformer(
+                num_damage_classes=self.config.num_classes,
+                num_disaster_classes=self.config.num_disaster_classes,
+                pretrained=False,
+            )
+
         model.load_state_dict(state_dict, strict=False)
         model.eval()
         model.to(self.device)

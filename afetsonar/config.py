@@ -50,7 +50,7 @@ SEVERITY_WEIGHTS: Dict[int, float] = {
     5: 2.0,   # unclassified
 }
 
-#: Population density (persons/m²) — Fatih / Sultanahmet district (TÜİK 2023).
+#: Default population density (persons/m²) — override per-region for accurate estimates.
 POPULATION_DENSITY: float = 0.05
 
 #: FEMA survival curve decay constant (per hour).
@@ -64,8 +64,8 @@ FEMA_LAMBDA: float = 0.008
 #: Native xBD Maxar imagery pixel size.
 PIXEL_SIZE_M: float = 0.5
 
-#: Training/inference spatial resolution.
-IMAGE_SIZE: int = 768
+#: Training/inference spatial resolution (must match xBD training: 512).
+IMAGE_SIZE: int = 512
 
 #: ImageNet normalisation (SegFormer pretrained).
 IMAGENET_MEAN: List[float] = [0.485, 0.456, 0.406]
