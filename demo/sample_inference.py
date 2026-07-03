@@ -18,6 +18,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# Windows consoles often default to a legacy codepage (e.g. cp1254) that
+# cannot encode the Unicode symbols printed below.
+if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 def _make_sample_images(tmp_dir: Path) -> tuple[str, str]:
     """Create tiny synthetic pre/post images for a self-contained demo."""
