@@ -108,6 +108,32 @@ Tests that require torch are auto-skipped when torch is absent.
 | 5 — SoTA improvement | ✅ Done | TTA (8 transforms + multi-scale), Copy-Paste aug |
 | 6 — Global support + Mobile | ✅ Done | FastAPI backend (`api/`), React Native app (`mobile/`) |
 | 7 — Tier-1 eval + ONNX | ✅ Code ready | `tta_forward` (batched TTA), `evaluate.py --tta`, notebook 09 (Colab), `deployment.py` (ONNX export, parity-checked). **Tier-1 runs pending on Colab H100** |
+| 8 — Web integration (API v2) | ✅ Done | Feature-based REST endpoints; EXIF GPS via Pillow; building footprint polygons + GeoJSON; full-layer Folium map (routes + LZ from live OSM). See `api/README.md` |
+
+## API v2 (2026-07-04) — debugging outcome
+
+Bugs found & fixed after the website integration reported failures:
+1. **EXIF GPS never worked in the Gradio app** — `gr.Image(type="numpy")`
+   strips EXIF, then GPS was read from a re-saved PNG (no metadata).
+   Fixed: `type="filepath"` + Pillow-based `read_exif_gps` (exifread now
+   optional fallback); `analyze()` auto-falls-back to EXIF coords.
+2. **Map markers were all grey** — `add_damage_markers` expected string
+   damage classes but the pipeline emits ints. Fixed via `_damage_name()`.
+3. **No building outlines** — pipeline only returned centroids, so the
+   website couldn't draw boundaries. Fixed: `polygon_latlon` footprints
+   (cv2.approxPolyDP) + `buildings_to_geojson()` (RFC 7946).
+4. **Wrong areas on real-world imagery** — `area_m2` assumed 0.5 m/px
+   (xBD native). Fixed: metres/pixel derived from the bbox.
+5. **Routes/LZ never rendered** — `generate_map` ignored them. Fixed:
+   `compute_team_routes` (OSM + gradient A* + TSP) and
+   `find_landing_zones` (OSM open areas), degrading gracefully offline.
+6. **Windows console crashes** — non-ASCII (`→`, `✅`) in library prints
+   crashed under cp1254. Fixed: ASCII-only prints in package code.
+
+Endpoints: `GET /health`, `GET /model-info`, `POST /exif-gps`,
+`POST /predict`, `POST /buildings` (`format=geojson` supported),
+`POST /map`, `POST /routes`, `POST /analyze`. All verified live over
+HTTP with the real student checkpoint (189 tests green).
 
 ## Next actions (2026-07-03)
 
