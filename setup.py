@@ -57,12 +57,17 @@ setup(
         "exif": [
             "exifread>=3.0.0",
         ],
+        "onnx": [
+            "onnx>=1.14.0",
+            "onnxruntime>=1.16.0",
+        ],
     },
     entry_points={
         "console_scripts": [
             "afetsonar-infer=scripts.inference:main",
             "afetsonar-pipeline=scripts.run_pipeline:main",
             "afetsonar-evaluate=scripts.evaluate:main",
+            "afetsonar-export-onnx=scripts.export_onnx:main",
         ],
     },
     classifiers=[
