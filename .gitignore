@@ -37,6 +37,9 @@ runs/
 *.log
 *.tfevents.*
 
+# ── Runtime caches (osmnx, auto-fetch) ───────────────────────
+cache/
+
 # ── OS ───────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
