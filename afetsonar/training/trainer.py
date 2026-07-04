@@ -223,6 +223,7 @@ class AfetsonarTrainer:
         save_every: int = 5,
         experiment_name: Optional[str] = None,
         use_swa: bool = False,
+        use_copy_paste: bool = False,
         batch_size: int = 4,
     ) -> Dict[str, Any]:
         """Fine-tune from the loaded checkpoint on new disaster imagery.
@@ -249,6 +250,9 @@ class AfetsonarTrainer:
                 from timestamp when ``None``.
             use_swa: Apply Stochastic Weight Averaging in the final 20 % of
                 epochs and save an additional ``swa_model.pth`` checkpoint.
+            use_copy_paste: Enrich the training set with Copy-Paste
+                augmentation (rare damage classes pasted from random donor
+                samples) — training loader only.
             batch_size: Batch size for both train and validation loaders.
 
         Returns:
@@ -297,6 +301,7 @@ class AfetsonarTrainer:
         train_loader = self._build_loader(
             combined_csv, augment=True,
             sample_weights=sample_weights, batch_size=batch_size,
+            use_copy_paste=use_copy_paste,
         )
         val_loader = self._build_loader(
             val_csv, augment=False, batch_size=batch_size,
@@ -573,6 +578,7 @@ class AfetsonarTrainer:
         sample_weights: Optional[np.ndarray] = None,
         batch_size: int = 4,
         num_workers: int = 0,
+        use_copy_paste: bool = False,
     ) -> Any:
         import torch
         from torch.utils.data import DataLoader, WeightedRandomSampler
@@ -594,11 +600,17 @@ class AfetsonarTrainer:
 
         # Both SiameseTeacherSegformerV3 and StudentSiameseSegformer accept
         # 6-channel (pre + post) input, so always use "teacher" dataset mode.
+        copy_paste = None
+        if use_copy_paste and augment:
+            from afetsonar.data.copy_paste import CopyPasteAugmentation
+            copy_paste = CopyPasteAugmentation()
+
         ds = XBDDatasetV2(
             csv_path=csv_path,
             mode="teacher",
             augmentation=aug,
             image_size=self.config.image_size,
+            copy_paste=copy_paste,
         )
 
         if sample_weights is not None:

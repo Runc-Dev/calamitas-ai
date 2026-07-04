@@ -65,6 +65,10 @@ class XBDDatasetV2(Dataset):
         building_aware_crop: Enable priority crop towards building regions.
         building_crop_prob: Probability of centering crop on a building
             pixel (vs. random crop).
+        copy_paste: Optional
+            :class:`~afetsonar.data.copy_paste.CopyPasteAugmentation`.
+            Applied on the raw (pre-normalisation) arrays with a randomly
+            drawn donor sample — teacher mode only, use for training.
 
     Example:
         >>> from afetsonar.data.augmentations import get_train_augmentation_v2
@@ -82,6 +86,7 @@ class XBDDatasetV2(Dataset):
         image_size: int = 768,
         building_aware_crop: bool = True,
         building_crop_prob: float = 0.8,
+        copy_paste: Optional[Any] = None,
     ) -> None:
         assert mode in ("teacher", "student"), f"mode must be 'teacher' or 'student', got {mode}"
         self.df = pd.read_csv(csv_path)
@@ -90,6 +95,7 @@ class XBDDatasetV2(Dataset):
         self.image_size = image_size
         self.building_aware_crop = building_aware_crop
         self.building_crop_prob = building_crop_prob
+        self.copy_paste = copy_paste
 
     def __len__(self) -> int:
         return len(self.df)
@@ -109,6 +115,25 @@ class XBDDatasetV2(Dataset):
         if mask is None:
             return np.zeros((self.image_size, self.image_size), dtype=np.uint8)
         return mask
+
+    def _load_raw_teacher(
+        self, idx: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Load raw (post, mask, pre) arrays for a row, size-aligned and
+        building-aware-cropped — used to draw Copy-Paste donor samples."""
+        row = self.df.iloc[idx]
+        post = self._load_image(row["post_path"])
+        mask = self._load_mask(row["mask_path"])
+        if post.shape[:2] != mask.shape[:2]:
+            mask = cv2.resize(
+                mask, (post.shape[1], post.shape[0]), interpolation=cv2.INTER_NEAREST
+            )
+        pre = self._load_image(row["pre_path"])
+        if pre.shape[:2] != post.shape[:2]:
+            pre = cv2.resize(pre, (post.shape[1], post.shape[0]))
+        if self.building_aware_crop and post.shape[0] > self.image_size:
+            post, mask, pre = self._building_aware_crop(post, mask, pre)
+        return post, mask, pre
 
     # ------------------------------------------------------------------
     # Cropping
@@ -177,6 +202,18 @@ class XBDDatasetV2(Dataset):
 
             if self.building_aware_crop and post.shape[0] > self.image_size:
                 post, mask, pre = self._building_aware_crop(post, mask, pre)
+
+            # Copy-Paste on raw arrays (before normalisation): enriches
+            # rare damage classes with regions from a random donor sample.
+            if self.copy_paste is not None:
+                d_post, d_mask, d_pre = self._load_raw_teacher(
+                    random.randint(0, len(self.df) - 1)
+                )
+                out = self.copy_paste(
+                    {"post": post, "pre": pre, "mask": mask},
+                    {"post": d_post, "pre": d_pre, "mask": d_mask},
+                )
+                post, pre, mask = out["post"], out["pre"], out["mask"]
 
             if self.augmentation is not None:
                 aug = self.augmentation(image=post, pre=pre, mask=mask)

@@ -230,3 +230,72 @@ class TestCopyPasteDataset:
         samples = [_make_sample(seed=i) for i in range(2)]
         ds = CopyPasteDataset(_TinyDataset(samples), augmentation=None)
         assert isinstance(ds.augmentation, CopyPasteAugmentation)
+
+
+# -----------------------------------------------------------------------
+# XBDDatasetV2 integration (trainer's use_copy_paste path)
+# -----------------------------------------------------------------------
+
+class TestDatasetIntegration:
+    """copy_paste= parameter of XBDDatasetV2 (raw arrays, pre-normalisation)."""
+
+    def _make_dataset_files(self, tmp_path):
+        import cv2
+        import pandas as pd
+
+        rows = []
+        for i, dmg_cls in enumerate([0, 4]):  # sample 1 empty, sample 2 destroyed
+            post = np.random.randint(0, 255, (96, 96, 3), dtype=np.uint8)
+            pre = np.random.randint(0, 255, (96, 96, 3), dtype=np.uint8)
+            mask = np.zeros((96, 96), dtype=np.uint8)
+            if dmg_cls:
+                mask[20:60, 20:60] = dmg_cls  # big destroyed block (donor)
+            paths = {}
+            for name, arr in [("post", post), ("pre", pre), ("mask", mask)]:
+                p = str(tmp_path / f"{name}_{i}.png")
+                cv2.imwrite(p, arr)
+                paths[name] = p
+            rows.append({
+                "post_path": paths["post"], "pre_path": paths["pre"],
+                "mask_path": paths["mask"], "disaster_idx": 0,
+                "filename": f"sample_{i}.png",
+            })
+        csv = str(tmp_path / "split.csv")
+        pd.DataFrame(rows).to_csv(csv, index=False)
+        return csv
+
+    def test_dataset_applies_copy_paste(self, tmp_path):
+        from afetsonar.data.copy_paste import CopyPasteAugmentation
+        from afetsonar.data.dataset import XBDDatasetV2
+
+        csv = self._make_dataset_files(tmp_path)
+        aug = CopyPasteAugmentation(
+            paste_probability=1.0, min_area_px=10, damage_classes_to_paste=(4,)
+        )
+        ds = XBDDatasetV2(
+            csv, mode="teacher", augmentation=None,
+            image_size=96, building_aware_crop=False, copy_paste=aug,
+        )
+
+        # Sample 0 has an empty mask; with p=1.0 a donor paste from
+        # sample 1 (destroyed block) must eventually land on it.
+        found_destroyed = False
+        for _ in range(20):
+            item = ds[0]
+            assert item["image"].shape == (6, 96, 96)
+            assert item["mask"].shape == (96, 96)
+            if (item["mask"] == 4).any():
+                found_destroyed = True
+                break
+        assert found_destroyed, "Copy-Paste never pasted the donor region"
+
+    def test_dataset_without_copy_paste_unchanged(self, tmp_path):
+        from afetsonar.data.dataset import XBDDatasetV2
+
+        csv = self._make_dataset_files(tmp_path)
+        ds = XBDDatasetV2(
+            csv, mode="teacher", augmentation=None,
+            image_size=96, building_aware_crop=False,
+        )
+        item = ds[0]
+        assert not (item["mask"] == 4).any()  # sample 0 mask stays empty
