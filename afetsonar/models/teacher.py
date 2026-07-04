@@ -73,8 +73,12 @@ class SiameseTeacherSegformerV3(nn.Module):
             cfg.num_labels = num_damage_classes
             base = SegformerForSemanticSegmentation(cfg)
 
-        self.encoder = base.segformer.encoder
-        self.decode_head = base.decode_head
+        from afetsonar.models._hf_compat import (
+            get_segformer_decode_head,
+            get_segformer_encoder,
+        )
+        self.encoder = get_segformer_encoder(base)
+        self.decode_head = get_segformer_decode_head(base)
         enc_channels: List[int] = list(base.config.hidden_sizes)  # e.g. [64,128,320,512]
         self.enc_channels = enc_channels
 

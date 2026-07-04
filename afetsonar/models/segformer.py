@@ -76,9 +76,11 @@ class LocalizerSegformer(nn.Module):
 
     def get_encoder_state_dict(self) -> dict:
         """Return a copy of the encoder weights for transfer to the teacher."""
+        from afetsonar.models._hf_compat import get_segformer_encoder
+
         return {
             name: param.clone()
-            for name, param in self.segformer.segformer.encoder.state_dict().items()
+            for name, param in get_segformer_encoder(self.segformer).state_dict().items()
         }
 
     def enable_gradient_checkpointing(self) -> bool:
@@ -87,7 +89,9 @@ class LocalizerSegformer(nn.Module):
         Returns:
             ``True`` if the operation succeeded, ``False`` otherwise.
         """
-        enc = self.segformer.segformer.encoder
+        from afetsonar.models._hf_compat import get_segformer_encoder
+
+        enc = get_segformer_encoder(self.segformer)
         if hasattr(enc, "gradient_checkpointing_enable"):
             enc.gradient_checkpointing_enable()
             return True

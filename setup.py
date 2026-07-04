@@ -22,7 +22,7 @@ setup(
         # Core ML
         "torch>=2.0.0",
         "torchvision>=0.15.0",
-        "transformers>=4.30.0",
+        "transformers>=5.0.0,<6.0.0",
         "segmentation-models-pytorch>=0.3.0",
         # Image / augmentation
         "albumentations>=1.3.0",
