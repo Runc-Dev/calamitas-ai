@@ -40,11 +40,16 @@ Post-disaster image ─┘         │
 
 | Model | mIoU (no bg) | mF1 | Destroyed IoU | Params | Latency |
 |-------|:-----------:|:---:|:-------------:|:------:|:-------:|
-| Teacher (SegFormer-B3) | **0.424** | **0.640** | **0.570** | 50.3M | ~1140 ms |
-| **Student (SegFormer-B0)** | **0.395** | **0.617** | **0.524** | **4.3M** | **36 ms ✅** |
+| Teacher (SegFormer-B3, 768px) | 0.424 | 0.640 | 0.570 | 50.3M | ~1140 ms |
+| **Teacher + TTA-8 (Tier 1)** | **0.430** | **0.644** | **0.579** | 50.3M | ~8× teacher |
+| **Student (SegFormer-B0, 512px)** | **0.395** | **0.617** | **0.524** | **4.3M** | **36 ms ✅** |
 
 > **Student = 12× smaller, 32.8× faster, 93% knowledge retention.**  
 > The only edge-deployable solution on the xView2 leaderboard.
+
+> ⚠️ The teacher must be evaluated at its native **768 px** — at 512 px it
+> loses ~0.09 mF1. `AfetsonarPipeline` and `evaluate.py` handle this
+> automatically. Full Tier-1 ablation: `results/tier1_comparison.csv`.
 
 ### Per-class IoU (Student)
 

@@ -161,7 +161,15 @@ HTTP with the real student checkpoint (189 tests green).
 |-----|-----------|-----|
 | teacher @ 512 | 0.3263 | 0.5510 |
 | teacher @ 512 + TTA(8) | 0.3313 | 0.5552 |
-| teacher @ 768 | **0.4241** | **0.6395** ← reproduces the published April numbers exactly |
+| teacher @ 512 + TTA(8) + MS(0.75/1/1.25) | 0.3414 | 0.5650 |
+| teacher @ 768 | 0.4241 | 0.6395 ← reproduces the published April numbers exactly |
+| **teacher @ 768 + TTA(8)** | **0.4304** | **0.6443** ← Tier-1 final (new project best) |
+| teacher @ 768 + TTA(8) + MS | 0.4294 | 0.6433 ← multi-scale does NOT help at native res |
+
+Tier-1 CLOSED (2026-07-04): TTA-8 at native resolution is the final
+recipe (+0.005 mF1, no retraining). Multi-scale adds nothing at 768.
+SWA deferred — bundle it with Tier-2 (Copy-Paste retraining) into a
+single teacher_v5 fine-tune at 768 to spend compute units once.
 
 Consequences implemented: `TEACHER_IMAGE_SIZE = 768` in config;
 `AfetsonarPipeline` bumps `config.image_size` to 768 when a teacher
