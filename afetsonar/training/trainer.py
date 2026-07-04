@@ -323,9 +323,11 @@ class AfetsonarTrainer:
 
         # ---- Mixed precision (CUDA only) ----
         use_amp = self.device.type == "cuda"
-        scaler = torch.cuda.amp.GradScaler() if use_amp else None
+        scaler = torch.amp.GradScaler("cuda") if use_amp else None
 
-        criterion = self._build_criterion()
+        # .to(device) moves the loss buffers (class weights) alongside the
+        # model — without it CUDA training crashes with a device mismatch.
+        criterion = self._build_criterion().to(self.device)
         best_miou = -1.0
         best_ckpt_path = ""
         epoch_history: List[Dict] = []
@@ -665,7 +667,7 @@ class AfetsonarTrainer:
             optimizer.zero_grad()
 
             if scaler is not None:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     outputs = self._model(images)
                     logits = outputs["damage_logits"]
                     if isinstance(logits, (list, tuple)):
@@ -696,7 +698,7 @@ class AfetsonarTrainer:
         import torch
         from afetsonar.evaluation.metrics import SegmentationMetrics
 
-        criterion = self._build_criterion()
+        criterion = self._build_criterion().to(self.device)
         seg = SegmentationMetrics(num_classes=self.config.num_classes)
         total_loss = 0.0
 

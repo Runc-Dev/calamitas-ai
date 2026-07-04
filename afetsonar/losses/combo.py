@@ -63,7 +63,8 @@ class FocalLoss(nn.Module):
         p_t = torch.exp(-ce)
         weight = (1.0 - p_t) ** self.gamma
         if self.alpha is not None:
-            weight = weight * self.alpha[targets.clamp(min=0)]
+            # .to() guards callers that never moved this module to the GPU.
+            weight = weight * self.alpha.to(ce.device)[targets.clamp(min=0)]
         valid = (targets != self.ignore_index).float()
         return (weight * ce * valid).sum() / valid.sum().clamp(min=1.0)
 
@@ -120,7 +121,8 @@ class DiceLoss(nn.Module):
 
         start = 1 if self.exclude_background else 0
         if self.class_weights is not None:
-            w = self.class_weights[start:]
+            # .to() guards callers that never moved this module to the GPU.
+            w = self.class_weights[start:].to(dice.device)
             return ((1.0 - dice[start:]) * w).sum() / w.sum()
         return (1.0 - dice[start:]).mean()
 
