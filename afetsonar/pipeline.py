@@ -45,7 +45,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from afetsonar.config import DefaultConfig
+from afetsonar.config import IMAGE_SIZE, TEACHER_IMAGE_SIZE, DefaultConfig
 from afetsonar.geo.utils import haversine_distance, pixel_to_geo
 
 
@@ -118,6 +118,12 @@ class AfetsonarPipeline:
                 num_disaster_classes=self.config.num_disaster_classes,
                 pretrained=False,
             )
+            # The teacher was trained at 768 px; the global default (512)
+            # targets the student. Running below native resolution costs
+            # ~0.09 mF1, so bump it unless the caller overrode the config.
+            if self.config.image_size == IMAGE_SIZE:
+                self.config.image_size = TEACHER_IMAGE_SIZE
+                print(f"[AfetsonarPipeline] Teacher inference resolution set to {TEACHER_IMAGE_SIZE}px")
         else:
             from afetsonar.models.student import StudentSiameseSegformer
             print("[AfetsonarPipeline] Detected student checkpoint -- loading StudentSiameseSegformer")

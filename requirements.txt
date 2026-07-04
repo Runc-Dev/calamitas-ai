@@ -8,9 +8,9 @@ gradio>=4.19.0
 # ── Core ML ───────────────────────────────────────────────────
 torch>=2.0.0
 torchvision>=0.15.0
-# Checkpoints validated against 5.7.0 (708/708 state-dict keys match);
-# newer majors change the SegFormer module layout.
-transformers>=5.0.0,<6.0.0
+# Checkpoints validated against 5.7.0 (708/708 state-dict keys match).
+# 5.12 already changed the SegFormer module layout, so pin below 5.8.
+transformers>=5.0.0,<5.8
 segmentation-models-pytorch>=0.3.0
 
 # ── Image / augmentation ──────────────────────────────────────

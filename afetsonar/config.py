@@ -64,8 +64,14 @@ FEMA_LAMBDA: float = 0.008
 #: Native xBD Maxar imagery pixel size.
 PIXEL_SIZE_M: float = 0.5
 
-#: Training/inference spatial resolution (must match xBD training: 512).
+#: Default spatial resolution — matches the *student* (SegFormer-B0)
+#: training resolution; also the edge-deployment target.
 IMAGE_SIZE: int = 512
+
+#: Teacher (SegFormer-B3) native training/inference resolution.
+#: Evaluating the teacher below this costs ~0.09 mF1 — verified on the
+#: xBD test_v3 split (2026-07-04): 512px -> mF1 0.551, 768px -> mF1 0.640.
+TEACHER_IMAGE_SIZE: int = 768
 
 #: ImageNet normalisation (SegFormer pretrained).
 IMAGENET_MEAN: List[float] = [0.485, 0.456, 0.406]

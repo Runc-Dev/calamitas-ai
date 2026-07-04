@@ -25,7 +25,7 @@ import torch
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from afetsonar.config import CLASS_NAMES, IMAGE_SIZE, DefaultConfig
+from afetsonar.config import CLASS_NAMES, DefaultConfig
 from afetsonar.data import XBDDatasetV2, get_val_augmentation_v2
 from afetsonar.evaluation import SegmentationMetrics, tta_forward
 from afetsonar.pipeline import AfetsonarPipeline
@@ -38,7 +38,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output",   default="results/eval_results.json")
     p.add_argument("--batch-size", type=int, default=4)
     p.add_argument("--device",   default="auto")
-    p.add_argument("--image-size", type=int, default=IMAGE_SIZE)
+    p.add_argument("--image-size", type=int, default=None,
+                   help="Defaults to the model's native resolution "
+                        "(teacher: 768, student: 512)")
     p.add_argument("--tta", action="store_true",
                    help="Enable 8-transform geometric test-time augmentation")
     p.add_argument("--tta-scales", type=float, nargs="+", default=[1.0],
@@ -49,12 +51,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    cfg = DefaultConfig()
-    cfg.image_size = args.image_size
-
-    # Model — architecture (teacher/student) auto-detected from checkpoint
+    # Model — architecture (teacher/student) auto-detected from checkpoint;
+    # the pipeline also sets its native inference resolution.
     pipeline = AfetsonarPipeline(args.model, device=args.device)
     model, device = pipeline.model, pipeline.device
+
+    cfg = DefaultConfig()
+    cfg.image_size = args.image_size or pipeline.config.image_size
+    print(f"Evaluation resolution: {cfg.image_size}px")
 
     # Dataset
     ds = XBDDatasetV2(
@@ -111,7 +115,7 @@ def main() -> None:
         "timing": {"total_s": elapsed, "img_per_s": len(ds)/elapsed},
         "model": args.model,
         "tta": {"enabled": args.tta, "scales": args.tta_scales},
-        "image_size": args.image_size,
+        "image_size": cfg.image_size,
     }
     with open(args.output, "w") as f:
         json.dump(results, f, indent=2)

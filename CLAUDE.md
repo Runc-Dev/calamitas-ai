@@ -147,10 +147,38 @@ HTTP with the real student checkpoint (189 tests green).
 
 | File | Before | After | Reason |
 |------|--------|-------|--------|
-| `config.py` IMAGE_SIZE | 768 | **512** | Drive training used 512 |
+| `config.py` IMAGE_SIZE | 768 | **512** | Student resolution / edge target (see resolution note below) |
 | `augmentations.py` default | 768 | **512** | Match Drive `augmentations_v2.py` |
 | `astar.py` LON_M | Istanbul 41°N hardcode | **dynamic (mean lat of buildings)** | Global routing support |
 | `config.py` POPULATION_DENSITY comment | "Fatih/Sultanahmet" | generic | Global support |
+
+## Resolution findings (2026-07-04, verified on Colab L4)
+
+**The teacher (SegFormer-B3) must run at 768 px** — its training resolution
+(`configs/teacher.yaml`). The student runs at 512 px. Measured on test_v3:
+
+| Run | mIoU_no_bg | mF1 |
+|-----|-----------|-----|
+| teacher @ 512 | 0.3263 | 0.5510 |
+| teacher @ 512 + TTA(8) | 0.3313 | 0.5552 |
+| teacher @ 768 | **0.4241** | **0.6395** ← reproduces the published April numbers exactly |
+
+Consequences implemented: `TEACHER_IMAGE_SIZE = 768` in config;
+`AfetsonarPipeline` bumps `config.image_size` to 768 when a teacher
+checkpoint is detected (unless the caller overrode it); `evaluate.py`
+`--image-size` now defaults to the model's native resolution.
+
+TTA reality check: at 512 the 8-transform TTA added only **+0.004 mF1**
+(far below the +0.03–0.05 hoped in the brief). Judge Tier-1 gains from
+the 768-based runs.
+
+## transformers compatibility
+
+Checkpoints are validated on **transformers 5.7.0** (708/708 teacher
+state-dict keys). 5.12 changed the SegFormer module layout and breaks
+model construction — hence the `transformers>=5.0,<5.8` pin.
+`models/_hf_compat.py` resolves encoder/decode-head defensively and
+fails loudly with install instructions on unknown layouts.
 
 ## Global Architecture (Phase 6)
 
