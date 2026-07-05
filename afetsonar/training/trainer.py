@@ -538,7 +538,14 @@ class AfetsonarTrainer:
                 pretrained=False,
             )
 
-        model.load_state_dict(state_dict, strict=False)
+        result = model.load_state_dict(state_dict, strict=False)
+        if result.missing_keys or result.unexpected_keys:
+            print(
+                f"[AfetsonarTrainer] WARNING: checkpoint/model mismatch -- "
+                f"{len(result.missing_keys)} missing, "
+                f"{len(result.unexpected_keys)} unexpected keys. Training "
+                f"would start from partially initialised weights."
+            )
         model.to(self.device)
         return model
 

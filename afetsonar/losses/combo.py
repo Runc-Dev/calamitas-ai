@@ -98,6 +98,11 @@ class DiceLoss(nn.Module):
         self.smooth = smooth
         self.exclude_background = exclude_background
         if class_weights is not None:
+            if len(class_weights) != num_classes:
+                raise ValueError(
+                    f"class_weights length {len(class_weights)} != "
+                    f"num_classes {num_classes}"
+                )
             self.register_buffer(
                 "class_weights", torch.tensor(class_weights, dtype=torch.float32)
             )

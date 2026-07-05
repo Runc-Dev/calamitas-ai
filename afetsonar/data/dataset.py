@@ -107,13 +107,19 @@ class XBDDatasetV2(Dataset):
     def _load_image(self, path: str) -> np.ndarray:
         img = cv2.imread(path)
         if img is None:
-            return np.zeros((self.image_size, self.image_size, 3), dtype=np.uint8)
+            # A missing/corrupt file silently becoming a black image would
+            # poison training without any signal — fail loudly instead.
+            raise FileNotFoundError(
+                f"Cannot read image (missing or corrupt): {path}"
+            )
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     def _load_mask(self, path: str) -> np.ndarray:
         mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         if mask is None:
-            return np.zeros((self.image_size, self.image_size), dtype=np.uint8)
+            raise FileNotFoundError(
+                f"Cannot read mask (missing or corrupt): {path}"
+            )
         return mask
 
     def _load_raw_teacher(

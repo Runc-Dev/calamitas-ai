@@ -110,13 +110,20 @@ class SegmentationMetrics:
 
         accuracy = tp.sum() / max(cm.sum(), 1.0)
 
+        def _safe_nanmean(values: np.ndarray) -> float:
+            """Mean over non-NaN entries; 0.0 when every class is absent
+            (avoids NaN leaking into JSON reports and the numpy
+            'Mean of empty slice' warning)."""
+            valid = ~np.isnan(values)
+            return float(values[valid].mean()) if valid.any() else 0.0
+
         return {
-            "miou": float(np.nanmean(iou)),
-            "miou_no_bg": float(np.nanmean(iou[1:])),
+            "miou": _safe_nanmean(iou),
+            "miou_no_bg": _safe_nanmean(iou[1:]),
             "iou_per_class": iou.tolist(),
             "accuracy": float(accuracy),
             "f1_per_class": f1.tolist(),
-            "mf1": float(np.nanmean(f1)),
+            "mf1": _safe_nanmean(f1),
         }
 
 

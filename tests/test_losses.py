@@ -96,3 +96,16 @@ class TestKnowledgeDistillationLoss:
             t_out = teacher(dummy_siamese_batch)
         result = KnowledgeDistillationLoss(num_classes=6)(s_out, t_out, {"damage_mask": dummy_mask})
         assert result["total"].item() >= 0
+
+
+def test_dice_class_weights_length_validated():
+    """Review finding #7: wrong-length class_weights must fail at
+    construction, not at the first training batch."""
+    import pytest as _pytest
+    from afetsonar.losses.combo import ComboDamageLossV3, DiceLoss
+
+    with _pytest.raises(ValueError, match="class_weights length"):
+        DiceLoss(num_classes=6, class_weights=[1.0, 2.0])
+
+    with _pytest.raises(ValueError, match="class_weights length"):
+        ComboDamageLossV3(num_classes=6, class_weights=[1.0, 2.0, 3.0])
