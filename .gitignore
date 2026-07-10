@@ -1,6 +1,7 @@
 # ── Data (too large for git) ──────────────────────────────────
 data/
 !afetsonar/data/
+!afetsonar_tf/data/
 *.zip
 *.tar.gz
 
@@ -66,3 +67,12 @@ outputs/
 # Commit these results files
 !results/ablation_table.csv
 !results/sota_comparison.csv
+
+# -- TF port --
+.venv-tf/
+checkpoints/export/
+*.weights.h5
+*.npz
+# but keep small golden test fixtures
+!tests_tf/golden/*.npz
+!tests_tf/golden/*.json

@@ -1,0 +1,20 @@
+# AFETSONAR TensorFlow/TPU port dependencies (tf-port branch)
+#
+# IMPORTANT: install into a SEPARATE environment from the PyTorch one.
+# transformers v5 dropped TensorFlow entirely, so this branch pins 4.x;
+# the PyTorch side pins >=5.0,<5.8. The two must never share an env.
+# Interchange between them is framework-neutral .npz (see
+# scripts/export_weights_npz.py and afetsonar_tf/convert_weights.py).
+#
+# Set TF_USE_LEGACY_KERAS=1 before importing transformers (HF TF models
+# require Keras 2 semantics on TF>=2.16; tf-keras provides them).
+
+tensorflow>=2.16,<2.20        # Colab TPU runtime ships its own; local dev: CPU build
+tf-keras                      # Keras 2 compatibility layer for TF>=2.16
+transformers>=4.46,<5         # last major with TFSegformer* classes
+numpy>=1.24.0
+pandas>=2.0.0
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+pyyaml>=6.0
+tqdm>=4.65.0
