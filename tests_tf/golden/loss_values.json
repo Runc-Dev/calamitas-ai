@@ -1,0 +1,14 @@
+{
+  "teacher_total": 3.6971397399902344,
+  "teacher_change": 0.890101432800293,
+  "teacher_disaster": 2.342611312866211,
+  "teacher_damage": 4.692655086517334,
+  "combo_total": 2.4637982845306396,
+  "combo_lovasz": 0.8359056115150452,
+  "combo_dice": 0.832910418510437,
+  "combo_focal": 6.265708923339844,
+  "lovasz_unweighted": 0.8349683880805969,
+  "lovasz_weighted": 0.8359056115150452,
+  "dice": 0.832910418510437,
+  "focal": 6.265708923339844
+}
