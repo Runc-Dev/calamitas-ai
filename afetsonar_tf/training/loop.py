@@ -181,8 +181,10 @@ class TeacherTrainerTF:
                 if val_metrics["miou_no_bg"] > best_miou:
                     best_miou = val_metrics["miou_no_bg"]
                     backup = self.ema.apply_to(self.model)
+                    # TF checkpoint format — h5 is unreliable for
+                    # subclassed models (verified by the round-trip test)
                     self.model.save_weights(
-                        str(ckpt_path / "teacher_tf_best_ema.weights.h5"))
+                        str(ckpt_path / "teacher_tf_best_ema.ckpt"))
                     self.ema.restore(self.model, backup)
                     entry["is_best"] = 1.0
 

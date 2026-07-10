@@ -24,6 +24,35 @@ TensorFlow/TPU portu öncesinde PyTorch kod tabanının satır satır incelemesi
 | 16 | Düşük | `training/trainer.py` | `epochs<2`'de warmup tüm eğitimi kaplıyor. | 🔀 tf-port: yeni `WarmupCosine` programında doğru formül; torch tarafına dokunulmadı (Tier-2 TPU'da koşacak) |
 | 17 | Bilgi | `training/trainer.py` | SWA `update_bn` tam bir epoch ek maliyet. | ❎ TF portunda SWA v1 kapsamı dışı (EMA yeterli); belgelendi |
 
+## TF portu hata ayıklama günlüğü (2026-07-06 gecesi, protokol formatında)
+
+### TF-P1
+1. **Kimlik:** TF-P1 · 2. **Dosya:** `afetsonar_tf/training/__init__.py:4`
+3. **Belirti:** pytest toplama aşamasında `ModuleNotFoundError: afetsonar_tf.training.ema_tf`
+4. **Kök neden:** `EmaShadows` `models/ema_tf.py`'de tanımlıyken `training/` altından import edilmesi
+5. **Düzeltme:** import yolu `afetsonar_tf.models.ema_tf` olarak düzeltildi
+6. **Test:** tüm tests_tf toplama + 22 test · 7. **Sonuç:** geçti · 8. **Yan etki:** yok · **Durum:** Çözüldü
+
+### TF-P2
+1. **Kimlik:** TF-P2 · 2. **Dosya:** `afetsonar_tf/data/augment_tf.py` `shared_color_jitter`
+3. **Belirti:** tf.data map derlemesinde `ValueError: 'hue' must also be initialized in the else branch`
+4. **Kök neden:** AutoGraph, `if tf.random.uniform([]) < p:` ifadesini `tf.cond`'a çevirir; yalnızca if-dalında tanımlanan tensörler (hue/sat/val) graf sözleşmesini bozar — klasik graph-tracing hatası
+5. **Düzeltme:** dallanma tamamen kaldırıldı; olasılık, parametreleri kimlik dönüşümüne ölçekleyen maske ile uygulandı (`param * do_flag`) — XLA/TPU dostu, davranışsal olarak eşdeğer
+6. **Test:** `test_tfrecord_pipeline` (3) + `test_train_smoke` (20 adım) · 7. **Sonuç:** 6/6 geçti · 8. **Yan etki:** atlanan durumda da hue/sat op'ları çalışır (CPU host'ta ihmal edilebilir maliyet) · **Durum:** Çözüldü
+
+### TF-P3
+1. **Kimlik:** TF-P3 · 2. **Dosya:** `afetsonar_tf/convert_weights.py` `load_backbone`
+3. **Belirti:** parite testinde `RuntimeError: Backbone load not clean: {'missing_keys': ['decode_head.batch_norm.num_batches_tracked']}`
+4. **Kök neden:** PT BatchNorm'un tamsayı adım sayacı (`num_batches_tracked`) TF'te var olmayan tek anahtar; sıkı eksiksizlik kontrolü bunu hata sayıyordu
+5. **Düzeltme:** yalnızca `num_batches_tracked` son ekli anahtarlar açıkça muaf tutuldu; diğer her eksik/fazla anahtar hâlâ hata
+6. **Test:** `test_parity_teacher` (3 test, 6 çıktı tensörü, atol 1e-3) · 7. **Sonuç:** 3/3 geçti · 8. **Yan etki:** yok (sayaç çıkarımda kullanılmıyor) · **Durum:** Çözüldü
+
+### Parite kanıtı (Tur 3)
+- `tests_tf`: **22/22 geçti** (TF 2.19.1, transformers 4.57.6, CPU fp32)
+- Teacher paritesi: 6 çıktı tensörünün tamamı `max|tf−torch| ≤ 1e-3`
+- Golden loss: CE/Dice/Focal ≤1e-4, Lovász ≤1e-3 toleransta eşleşti
+- Torch tarafı: branch'te `pytest tests/` → **199/199** (tests_tf, torch ortamında otomatik atlanır)
+
 ## Porta özgü doğrulanan gerçekler
 
 - `teacher_v4_best_ema.pth` yapısı: `{epoch: 74, model_state_dict: 708 anahtar, val_miou_no_bg: 0.4703, history}` — **EMA ayrı sözlük değil; state dict zaten EMA'lı ağırlıklar** (BN running stats dahil, 9 adet). Dönüşüm tek aşamalı.

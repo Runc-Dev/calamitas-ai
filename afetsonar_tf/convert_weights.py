@@ -48,10 +48,21 @@ def load_backbone(model, hf_npz_path: str) -> None:
         allow_missing_keys=False,
         output_loading_info=True,
     )
-    problems = {k: v for k, v in info.items() if v}
+
+    def _is_bn_counter(key: str) -> bool:
+        # PT BatchNorm tracks an int step counter with no TF equivalent;
+        # it is the ONLY key allowed to go unconsumed.
+        return key.endswith("num_batches_tracked")
+
+    problems = {}
+    for kind, keys in info.items():
+        keys = [k for k in keys if not _is_bn_counter(str(k))]
+        if keys:
+            problems[kind] = keys
     if problems:
         raise RuntimeError(f"Backbone load not clean: {problems}")
-    print(f"Backbone loaded: {len(pt_state)} tensors, no mismatches")
+    print(f"Backbone loaded: {len(pt_state)} tensors "
+          f"(num_batches_tracked counters skipped by design)")
 
 
 def load_custom_heads(model, full_npz_path: str) -> None:

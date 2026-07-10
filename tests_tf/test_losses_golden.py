@@ -32,7 +32,7 @@ def test_focal_matches_torch(golden_loss_data):
         _nhwc(inputs["logits_main"]), inputs["damage_mask"],
         gamma=2.0, alpha=inputs["class_weights"].tolist(),
     )
-    assert abs(float(got) - values["focal"]) < 5e-4
+    assert abs(float(got) - values["focal"]) < 1e-4
 
 
 def test_dice_matches_torch(golden_loss_data):
@@ -41,7 +41,7 @@ def test_dice_matches_torch(golden_loss_data):
         _nhwc(inputs["logits_main"]), inputs["damage_mask"],
         num_classes=6, class_weights=inputs["class_weights"].tolist(),
     )
-    assert abs(float(got) - values["dice"]) < 5e-4
+    assert abs(float(got) - values["dice"]) < 1e-4
 
 
 def test_lovasz_matches_torch(golden_loss_data):
@@ -64,8 +64,8 @@ def test_combo_matches_torch(golden_loss_data):
         num_classes=6, class_weights=inputs["class_weights"].tolist(),
     )
     assert abs(float(got["total"]) - values["combo_total"]) < 1.5e-3
-    assert abs(float(got["dice"]) - values["combo_dice"]) < 5e-4
-    assert abs(float(got["focal"]) - values["combo_focal"]) < 5e-4
+    assert abs(float(got["dice"]) - values["combo_dice"]) < 1e-4
+    assert abs(float(got["focal"]) - values["combo_focal"]) < 1e-4
     assert abs(float(got["lovasz"]) - values["combo_lovasz"]) < 1e-3
 
 
@@ -90,7 +90,7 @@ def test_teacher_loss_matches_torch(golden_loss_data):
         outputs, targets,
         damage_class_weights=inputs["class_weights"].tolist(),
     )
-    assert abs(float(got["change"]) - values["teacher_change"]) < 5e-4
-    assert abs(float(got["disaster"]) - values["teacher_disaster"]) < 5e-4
+    assert abs(float(got["change"]) - values["teacher_change"]) < 1e-4
+    assert abs(float(got["disaster"]) - values["teacher_disaster"]) < 1e-4
     assert abs(float(got["damage"]) - values["teacher_damage"]) < 5e-3
     assert abs(float(got["total"]) - values["teacher_total"]) < 5e-3

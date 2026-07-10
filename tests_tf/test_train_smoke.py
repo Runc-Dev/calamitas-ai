@@ -109,3 +109,35 @@ def test_evaluate_returns_metrics(tmp_path):
     for key in ("miou", "miou_no_bg", "mf1", "accuracy"):
         assert key in metrics
         assert np.isfinite(metrics[key])
+
+
+def test_strategy_fallback_detects_cpu():
+    """Without TPU/GPU the detector must fall back to the default
+    (CPU) strategy instead of raising."""
+    from afetsonar_tf.training.strategy import detect_strategy
+
+    strategy = detect_strategy(verbose=False)
+    assert strategy.num_replicas_in_sync >= 1
+
+
+def test_checkpoint_roundtrip_same_outputs(tmp_path):
+    """Save -> fresh model -> load -> identical forward outputs."""
+    x = tf.random.stateless_uniform([2, 32, 32, 6], seed=[1, 2])
+
+    model_a = _ToyTeacher()
+    model_a(x)  # build
+    out_a = model_a(x, training=False)
+    path = str(tmp_path / "toy.ckpt")
+    model_a.save_weights(path)
+
+    model_b = _ToyTeacher()
+    model_b(x)  # build with different random init
+    model_b.load_weights(path)
+    out_b = model_b(x, training=False)
+
+    for key in ("change_logits", "disaster_logits"):
+        np.testing.assert_allclose(
+            out_a[key].numpy(), out_b[key].numpy(), atol=1e-6)
+    np.testing.assert_allclose(
+        out_a["damage_logits"][0].numpy(),
+        out_b["damage_logits"][0].numpy(), atol=1e-6)

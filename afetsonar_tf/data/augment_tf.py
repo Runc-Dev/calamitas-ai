@@ -117,24 +117,31 @@ def shared_color_jitter(
     pre_f = tf.cast(pre, tf.float32) / 255.0
     post_f = tf.cast(post, tf.float32) / 255.0
 
-    if tf.random.uniform([]) < 0.3:
-        brightness = tf.random.uniform([], -0.10, 0.10)
-        contrast = tf.random.uniform([], 0.90, 1.10)
-        for_both = lambda x: tf.clip_by_value(
+    # Branch-free probability gating: parameters are scaled towards the
+    # identity transform when the draw says "skip". Defining tensors
+    # inside `if tf.random...` branches breaks AutoGraph/XLA tracing
+    # ("must also be initialized in the else branch").
+    do_bc = tf.cast(tf.random.uniform([]) < 0.3, tf.float32)
+    brightness = tf.random.uniform([], -0.10, 0.10) * do_bc
+    contrast = 1.0 + tf.random.uniform([], -0.10, 0.10) * do_bc
+
+    def _bc(x: tf.Tensor) -> tf.Tensor:
+        return tf.clip_by_value(
             (x - 0.5) * contrast + 0.5 + brightness, 0.0, 1.0)
-        pre_f, post_f = for_both(pre_f), for_both(post_f)
 
-    if tf.random.uniform([]) < 0.2:
-        hue = tf.random.uniform([], -5.0 / 360.0, 5.0 / 360.0)
-        sat = tf.random.uniform([], 0.90, 1.10)
-        val = tf.random.uniform([], 0.95, 1.05)
+    pre_f, post_f = _bc(pre_f), _bc(post_f)
 
-        def _hsv(x: tf.Tensor) -> tf.Tensor:
-            x = tf.image.adjust_hue(x, hue)
-            x = tf.image.adjust_saturation(x, sat)
-            return tf.clip_by_value(x * val, 0.0, 1.0)
+    do_hsv = tf.cast(tf.random.uniform([]) < 0.2, tf.float32)
+    hue = tf.random.uniform([], -5.0 / 360.0, 5.0 / 360.0) * do_hsv
+    sat = 1.0 + tf.random.uniform([], -0.10, 0.10) * do_hsv
+    val = 1.0 + tf.random.uniform([], -0.05, 0.05) * do_hsv
 
-        pre_f, post_f = _hsv(pre_f), _hsv(post_f)
+    def _hsv(x: tf.Tensor) -> tf.Tensor:
+        x = tf.image.adjust_hue(x, hue)
+        x = tf.image.adjust_saturation(x, sat)
+        return tf.clip_by_value(x * val, 0.0, 1.0)
+
+    pre_f, post_f = _hsv(pre_f), _hsv(post_f)
 
     to_uint8 = lambda x: tf.cast(tf.round(x * 255.0), tf.uint8)
     return to_uint8(pre_f), to_uint8(post_f)

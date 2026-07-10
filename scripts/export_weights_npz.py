@@ -205,17 +205,51 @@ def main() -> None:
     print("Golden losses:", json.dumps(loss_values, indent=2))
 
     # ---- 4. Manifest ----------------------------------------------------
+    import hashlib
+    import subprocess
+
+    def _sha256(path: Path) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    except Exception:
+        git_commit = "unknown"
+
     manifest = {
         **meta,
-        "shapes": {k: list(v.shape) for k, v in arrays.items()},
+        "git_commit": git_commit,
+        "golden_input_seed": 1234,
+        "golden_loss_seed": 4321,
+        "model_config": {
+            "architecture": "SiameseTeacherSegformerV3",
+            "backbone": "MiT-B3",
+            "num_damage_classes": 6,
+            "num_disaster_classes": 5,
+            "deep_supervision": True,
+        },
         "backbone_keys": len(hf_arrays),
         "custom_keys": sorted(
             k for k in arrays if not k.startswith(BACKBONE_PREFIXES)
         ),
+        "shapes": {k: list(v.shape) for k, v in arrays.items()},
+        "dtypes": {k: str(v.dtype) for k, v in arrays.items()},
+        "sha256": {
+            name: _sha256(out_dir / name)
+            for name in ("teacher_v4_ema_full.npz",
+                         "teacher_v4_ema_hf.npz",
+                         "golden_teacher_io.npz")
+        },
     }
     with open(out_dir / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
-    print(f"Manifest written -> {out_dir/'manifest.json'}")
+    print(f"Manifest written -> {out_dir/'manifest.json'} "
+          f"(sha256 + git {git_commit[:8]})")
 
 
 if __name__ == "__main__":

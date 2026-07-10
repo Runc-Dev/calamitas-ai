@@ -11,7 +11,9 @@
 
 tensorflow>=2.16,<2.20        # Colab TPU runtime ships its own; local dev: CPU build
 tf-keras                      # Keras 2 compatibility layer for TF>=2.16
-transformers>=4.46,<5         # last major with TFSegformer* classes
+# Parity-validated version (22/22 tests incl. 1e-3 teacher parity on
+# TF 2.19.1 / 2026-07-06). 4.x is required — v5 dropped TF entirely.
+transformers==4.57.6
 numpy>=1.24.0
 pandas>=2.0.0
 opencv-python-headless>=4.8.0
