@@ -22,7 +22,9 @@ Usage (Colab)::
         --out-dir /content/drive/MyDrive/AFETSONAR/tfrecords \
         --copy-paste
 
-    # repeat with val_v3.csv / test_v3.csv (without --copy-paste)
+    # repeat with val_v3.csv / test_v3.csv (without --copy-paste);
+    # --split gate is the fixed 200-row test subset used by the TPU
+    # gate evaluation (notebook 10 globs gate_*.tfrecord)
 """
 
 from __future__ import annotations
@@ -112,7 +114,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", required=True, help="split CSV (v3)")
     parser.add_argument("--split", required=True,
-                        choices=["train", "val", "test"])
+                        choices=["train", "val", "test", "gate"])
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--copy-paste", action="store_true",
                         help="also write offline Copy-Paste shards "

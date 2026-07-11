@@ -47,6 +47,21 @@ TensorFlow/TPU portu öncesinde PyTorch kod tabanının satır satır incelemesi
 5. **Düzeltme:** yalnızca `num_batches_tracked` son ekli anahtarlar açıkça muaf tutuldu; diğer her eksik/fazla anahtar hâlâ hata
 6. **Test:** `test_parity_teacher` (3 test, 6 çıktı tensörü, atol 1e-3) · 7. **Sonuç:** 3/3 geçti · 8. **Yan etki:** yok (sayaç çıkarımda kullanılmıyor) · **Durum:** Çözüldü
 
+### TF-P4
+1. **Kimlik:** TF-P4 · 2. **Dosya:** ortam — Colab `drive.mount` (kod hatası değil)
+3. **Belirti:** Notebook 11 hücre 1'de üç kez `ValueError: mount failed` (~2 dk zaman aşımı)
+4. **Kök neden:** Drive OAuth onay penceresi ayrı Chrome penceresinde açılıyor; otomasyon oturumunun erişimi dışında kaldı ve onay 2 dk içinde tamamlanamadı. Colab'ın mount akışı onaysız zaman aşımına düşüyor
+5. **Düzeltme:** Kullanıcı OAuth onayını bir kez elle verdi ("Devam Et"); izin hesapta kalıcı olduğu için sonraki mount'lar etkileşimsiz 8 sn'de tamamlandı
+6. **Test:** hücre 1 yeniden koşuldu · 7. **Sonuç:** geçti (`AFETSONAR` klasör assert'i dahil) · 8. **Yan etki:** yok; TPU oturumunda (notebook 10) tekrar onay gerekmeyecek · **Durum:** Çözüldü
+
+### TF-P5
+1. **Kimlik:** TF-P5 · 2. **Dosya:** `scripts_tf/convert_to_tfrecords.py` `--split` argümanı ↔ `notebooks/11_tf_prep_cpu.ipynb` hücre 5
+3. **Belirti:** `convert_to_tfrecords.py: error: argument --split: invalid choice: 'gate' (choose from train, val, test)` — gate shard'ları üretilmedi; `!` komutu hücreyi durdurmadığı için val dönüştürmesi devam etti
+4. **Kök neden:** Notebook 11, gate alt kümesi için `--split gate` çağırıyor ama dönüştürücünün `choices` listesi yalnızca train/val/test içeriyordu — iki dosya arasında sözleşme uyuşmazlığı
+5. **Düzeltme:** `choices` listesine `"gate"` eklendi (commit bu satırla birlikte). Shard adlandırması `{split}_dmg/-nodmg` kalıbından türediği için `gate_dmg-*` / `gate_nodmg-*` üretimi notebook 10'un `gate_*` glob'uyla birebir eşleşiyor — başka değişiklik gerekmedi
+6. **Düzeltmenin doğruluğu:** eval yolunda split adı yalnızca dosya adı önekini belirler; parse şeması tüm split'lerde aynı (`parse_eval`)
+7. **Test:** Colab'da val/train dönüştürmesi bittikten sonra kuyruklanan hücrede `git pull` + gate dönüştürmesi yeniden koşulacak · 8. **Sonuç:** bekliyor (Colab kuyruk) · 9. **Yan etki:** yok · **Durum:** Kısmen çözüldü (kod düzeltildi, Colab doğrulaması kuyrukta)
+
 ### Parite kanıtı (Tur 3)
 - `tests_tf`: **22/22 geçti** (TF 2.19.1, transformers 4.57.6, CPU fp32)
 - Teacher paritesi: 6 çıktı tensörünün tamamı `max|tf−torch| ≤ 1e-3`
