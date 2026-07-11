@@ -60,7 +60,7 @@ TensorFlow/TPU portu öncesinde PyTorch kod tabanının satır satır incelemesi
 4. **Kök neden:** Notebook 11, gate alt kümesi için `--split gate` çağırıyor ama dönüştürücünün `choices` listesi yalnızca train/val/test içeriyordu — iki dosya arasında sözleşme uyuşmazlığı
 5. **Düzeltme:** `choices` listesine `"gate"` eklendi (commit bu satırla birlikte). Shard adlandırması `{split}_dmg/-nodmg` kalıbından türediği için `gate_dmg-*` / `gate_nodmg-*` üretimi notebook 10'un `gate_*` glob'uyla birebir eşleşiyor — başka değişiklik gerekmedi
 6. **Düzeltmenin doğruluğu:** eval yolunda split adı yalnızca dosya adı önekini belirler; parse şeması tüm split'lerde aynı (`parse_eval`)
-7. **Test:** Colab'da val/train dönüştürmesi bittikten sonra kuyruklanan hücrede `git pull` + gate dönüştürmesi yeniden koşulacak · 8. **Sonuç:** bekliyor (Colab kuyruk) · 9. **Yan etki:** yok · **Durum:** Kısmen çözüldü (kod düzeltildi, Colab doğrulaması kuyrukta)
+7. **Test:** kalıcı çözüm olarak notebook 10'un shard-kopyalama hücresine öz-onarım eklendi — gate shard'ları yoksa TPU oturumu `tf_export/test200.csv`'den kendisi üretir (~2-3 dk) ve Drive'a geri kopyalar; `assert gate_files` ile sessiz geçiş engellendi · 8. **Sonuç:** TPU oturumunda doğrulanacak · 9. **Yan etki:** yok (gate shard'ları mevcutsa hücre davranışı değişmez) · **Durum:** Kısmen çözüldü (kod düzeltildi + öz-onarım; Colab doğrulaması TPU oturumunda)
 
 ### Parite kanıtı (Tur 3)
 - `tests_tf`: **22/22 geçti** (TF 2.19.1, transformers 4.57.6, CPU fp32)
