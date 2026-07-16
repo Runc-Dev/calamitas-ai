@@ -62,6 +62,15 @@ TensorFlow/TPU portu öncesinde PyTorch kod tabanının satır satır incelemesi
 6. **Düzeltmenin doğruluğu:** eval yolunda split adı yalnızca dosya adı önekini belirler; parse şeması tüm split'lerde aynı (`parse_eval`)
 7. **Test:** kalıcı çözüm olarak notebook 10'un shard-kopyalama hücresine öz-onarım eklendi — gate shard'ları yoksa TPU oturumu `tf_export/test200.csv`'den kendisi üretir (~2-3 dk) ve Drive'a geri kopyalar; `assert gate_files` ile sessiz geçiş engellendi · 8. **Sonuç:** TPU oturumunda doğrulanacak · 9. **Yan etki:** yok (gate shard'ları mevcutsa hücre davranışı değişmez) · **Durum:** Kısmen çözüldü (kod düzeltildi + öz-onarım; Colab doğrulaması TPU oturumunda)
 
+### TF-P6
+1. **Kimlik:** TF-P6 · 2. **Dosya:** ortam — Colab ücretsiz CPU oturum ömrü ↔ `notebooks/11_tf_prep_cpu.ipynb` train hücresi
+3. **Belirti:** train TFRecord dönüştürmesi (6.417 örnek + Copy-Paste, ~7-8 saat) iki ayrı koşuda ~4200-4400/6417 civarında öldü (oturum/VM geri alındı); tek parçalık iş ücretsiz oturuma sığmıyor
+4. **Kök neden:** Colab ücretsiz CPU oturumlarının pratik ömrü + Drive FUSE yavaşlaması; dönüştürücüde devam-etme mekanizması yoktu — her çökme sıfırdan başlatıyordu
+5. **Düzeltme:** (a) dönüştürücüye `--rows BAŞ:SON` (CSV dilimi; ön tarama da dilimle sınırlı) ve `--shard-suffix` (örn. `train_dmg-p1-00000.tfrecord` — parçalar birbirini ezmez, `train_dmg-*` glob'u ikisini de yakalar) eklendi; (b) notebook 11 idempotent yapıldı: her pahalı hücre Drive'daki çıktıyı görürse kendini atlar, train P1 (0:3209) ve P2 (3209:son) ayrı hücreler + `.train_pX_done` işaret dosyaları; (c) eski bölünmemiş kısmi shard'ları silen temizlik hücresi (`train_*-[0-9]*` kalıbı — p1/p2'ye dokunmaz; kesik dosyaların notebook 10 glob'una sızmasını önler)
+6. **Neden doğru:** dilimleme deterministik (aynı CSV+seed), adlandırma çakışmasız, notebook 10 değişmeden çalışır; çökme kurtarması "Tümünü çalıştır"a indi
+7. **Kontrollü sapma:** Copy-Paste donör havuzu artık dilim-içi (parça başına ~3.2k örnek); çeşitlilik pratikte yeterli, Tier-2 raporunda belirtilecek
+8. **Test:** yerel `--help`/argüman doğrulaması + Colab P1 koşusunun ilk logları (`train_dmg-p1-` adlandırması) · 9. **Sonuç:** Colab doğrulaması koşuda · 10. **Yan etki:** eski kısmi shard'lar bilinçli siliniyor (bozuk oldukları için) · **Durum:** Kısmen çözüldü (kod hazır, P1/P2 koşusu bekliyor)
+
 ### Parite kanıtı (Tur 3)
 - `tests_tf`: **22/22 geçti** (TF 2.19.1, transformers 4.57.6, CPU fp32)
 - Teacher paritesi: 6 çıktı tensörünün tamamı `max|tf−torch| ≤ 1e-3`

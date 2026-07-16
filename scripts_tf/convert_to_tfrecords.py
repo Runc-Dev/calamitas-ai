@@ -123,6 +123,15 @@ def main() -> None:
                         help="if > 0, store pre/post as JPEG at this "
                              "quality instead of PNG (saves ~60%% space; "
                              "mask stays PNG)")
+    parser.add_argument("--rows", default=None,
+                        help="process only CSV rows START:END (iloc slice; "
+                             "either side may be empty) so a long conversion "
+                             "can run as separate resumable parts")
+    parser.add_argument("--shard-suffix", default="",
+                        help="extra shard-name segment, e.g. 'p1' -> "
+                             "train_dmg-p1-00000.tfrecord; keeps parts from "
+                             "overwriting each other while still matching "
+                             "the <split>_dmg-* training glob")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -137,6 +146,17 @@ def main() -> None:
     if not required.issubset(df.columns):
         raise ValueError(f"CSV missing columns: {required - set(df.columns)}")
 
+    if args.rows:
+        start_s, _, end_s = args.rows.partition(":")
+        start = int(start_s) if start_s else 0
+        end = int(end_s) if end_s else len(df)
+        if not (0 <= start < end <= len(df)):
+            raise ValueError(f"--rows {args.rows} out of range for "
+                             f"{len(df)}-row CSV")
+        df = df.iloc[start:end]
+        print(f"--rows {start}:{end} -> {len(df)} samples in this part",
+              flush=True)
+
     def encode_rgb(arr: np.ndarray) -> bytes:
         if args.jpeg_quality > 0:
             bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
@@ -147,9 +167,10 @@ def main() -> None:
             return buf.tobytes()
         return _png_bytes(arr)
 
-    dmg_writer = _ShardWriter(out_dir, f"{args.split}_dmg")
-    nodmg_writer = _ShardWriter(out_dir, f"{args.split}_nodmg")
-    cp_writer = (_ShardWriter(out_dir, f"{args.split}_cp")
+    sfx = f"-{args.shard_suffix}" if args.shard_suffix else ""
+    dmg_writer = _ShardWriter(out_dir, f"{args.split}_dmg{sfx}")
+    nodmg_writer = _ShardWriter(out_dir, f"{args.split}_nodmg{sfx}")
+    cp_writer = (_ShardWriter(out_dir, f"{args.split}_cp{sfx}")
                  if args.copy_paste else None)
     copy_paste = CopyPasteAugmentation(paste_probability=1.0)
 
